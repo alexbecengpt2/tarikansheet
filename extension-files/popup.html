@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      padding: 0;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .container {
+      padding: 20px;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    
+    .header p {
+      margin: 5px 0 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .btn-primary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.9);
+      color: #667eea;
+    }
+    
+    .btn-secondary:hover:not(:disabled) {
+      background: white;
+      transform: translateY(-1px);
+    }
+    
+    .status {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .status.success {
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #065f46;
+    }
+    
+    .status.error {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #7f1d1d;
+    }
+    
+    .status.info {
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #1e3a8a;
+    }
+    
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Smart Sheets</h1>
+      <p>Kirim teks terpilih ke spreadsheet</p>
+    </div>
+    
+    <button class="btn btn-primary" id="openApp">
+      <span class="icon">🚀</span>
+      Buka Smart Sheets
+    </button>
+    
+    <button class="btn btn-secondary" id="sendSelected">
+      <span class="icon" id="sendIcon">📤</span>
+      <span id="sendText">Kirim Teks Terpilih</span>
+    </button>
+    
+    <div id="status" class="status"></div>
+  </div>
+  
+  <script>
+    console.log('Popup script loaded');
+    
+    function showStatus(message, type) {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = `status ${type}`;
+      status.style.display = 'block';
+      
+      setTimeout(() => {
+        status.style.display = 'none';
+      }, 4000);
+    }
+    
+    function setButtonLoading(isLoading) {
+      const sendBtn = document.getElementById('sendSelected');
+      const sendIcon = document.getElementById('sendIcon');
+      const sendText = document.getElementById('sendText');
+      
+      if (isLoading) {
+        sendBtn.disabled = true;
+        sendIcon.innerHTML = '<div class="loading"></div>';
+        sendText.textContent = 'Mengirim...';
+      } else {
+        sendBtn.disabled = false;
+        sendIcon.textContent = '📤';
+        sendText.textContent = 'Kirim Teks Terpilih';
+      }
+    }
+    
+    document.getElementById('openApp').onclick = () => {
+      console.log('Opening Smart Sheets app');
+      chrome.tabs.create({
+        url: 'https://ex-tarikan.netlify.app/'
+      });
+      window.close();
+    };
+    
+    document.getElementById('sendSelected').onclick = () => {
+      console.log('Send selected text clicked');
+      setButtonLoading(true);
+      
+      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: "getSelectedText"
+          }, (response) => {
+            console.log('Response from content script:', response);
+            
+            if (chrome.runtime.lastError) {
+              console.error('Runtime error:', chrome.runtime.lastError);
+              showStatus('Error: Refresh halaman dan coba lagi', 'error');
+              setButtonLoading(false);
+              return;
+            }
+            
+            if (response && response.text && response.text.trim()) {
+              console.log('Attempting to send to existing app tab:', response.text);
+              
+              // Look for existing Smart Sheets tab
+              chrome.tabs.query({ url: "https://ex-tarikan.netlify.app/*" }, (appTabs) => {
+                if (appTabs && appTabs.length > 0) {
+                  // Found an existing app tab
+                  const appTabId = appTabs[0].id;
+                  console.log('Found app tab:', appTabId);
+                  
+                  // Focus on the app tab
+                  chrome.tabs.update(appTabId, { active: true });
+                  chrome.windows.update(appTabs[0].windowId, { focused: true });
+                  
+                  // Send message to app tab
+                  chrome.tabs.sendMessage(appTabId, {
+                    type: 'SELECTED_TEXT',
+                    text: response.text,
+                    url: response.url
+                  }, (msgResponse) => {
+                    setButtonLoading(false);
+                    
+                    if (chrome.runtime.lastError) {
+                      console.error('Error sending message to app tab:', chrome.runtime.lastError);
+                      showStatus('Gagal mengirim: ' + chrome.runtime.lastError.message, 'error');
+                    } else {
+                      console.log('Message sent to app tab successfully');
+                      showStatus('✅ Teks berhasil dikirim ke Smart Sheets!', 'success');
+                      
+                      // Auto close popup after success
+                      setTimeout(() => {
+                        window.close();
+                      }, 1500);
+                    }
+                  });
+                } else {
+                  // No app tab found
+                  setButtonLoading(false);
+                  showStatus('❌ Smart Sheets belum dibuka! Silakan buka aplikasi terlebih dahulu.', 'error');
+                }
+              });
+            } else {
+              setButtonLoading(false);
+              showStatus('❌ Tidak ada teks yang dipilih', 'error');
+            }
+          });
+        }
+      });
+    };
+  </script>
+</body>
+</html>
