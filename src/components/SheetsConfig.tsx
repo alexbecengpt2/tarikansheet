@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link } from 'lucide-react';
 import { SheetsConfig as SheetsConfigType, SheetInfo } from '../types';
-import { testSheetsConnection, getSheetsList } from '../utils/sheetsIntegration';
+import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey } from '../utils/sheetsIntegration';
 
 interface SheetsConfigProps {
   config: SheetsConfigType;
@@ -18,6 +18,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   const [isLoadingSheets, setIsLoadingSheets] = useState(false);
   const [savedConfigs, setSavedConfigs] = useState<SheetsConfigType[]>([]);
   const [showConfigManager, setShowConfigManager] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('text-to-sheets-configs');
@@ -60,9 +61,25 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     }
   };
 
+  const handleUrlExtract = () => {
+    const extractedId = extractSpreadsheetId(urlInput);
+    if (extractedId) {
+      setLocalConfig(prev => ({ ...prev, spreadsheetId: extractedId }));
+      setUrlInput('');
+      setTestResult(null);
+    } else {
+      setTestResult({ success: false, message: 'URL tidak valid. Pastikan URL adalah link Google Sheets yang benar.' });
+    }
+  };
+
   const handleTestConnection = async () => {
     if (!localConfig.spreadsheetId || !localConfig.apiKey) {
       setTestResult({ success: false, message: 'Harap isi Spreadsheet ID dan API Key terlebih dahulu' });
+      return;
+    }
+
+    if (!validateApiKey(localConfig.apiKey)) {
+      setTestResult({ success: false, message: 'Format API Key tidak valid. API Key harus dimulai dengan "AIza"' });
       return;
     }
 
@@ -117,6 +134,10 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     localStorage.setItem('text-to-sheets-configs', JSON.stringify(updatedConfigs));
   };
 
+  const copyExampleUrl = () => {
+    navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/1zcsm2DPVccpnOGz_9HkVotn9M9f6KRiA_-C2CNld6_c/edit');
+  };
+
   const isConfigured = config.spreadsheetId && config.apiKey;
 
   return (
@@ -127,8 +148,8 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             <Settings className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-gray-800">Multi-Sheet Config</h3>
-            <p className="text-sm text-gray-600">Kelola beberapa sheet sekaligus</p>
+            <h3 className="text-xl font-bold text-gray-800">Google Sheets Setup</h3>
+            <p className="text-sm text-gray-600">Konfigurasi koneksi ke spreadsheet</p>
           </div>
         </div>
         <div className="flex space-x-2">
@@ -142,40 +163,52 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-sm text-blue-600 hover:text-blue-700 transition-colors font-medium"
           >
-            {isExpanded ? 'Tutup' : 'Buka'}
+            {isExpanded ? 'Tutup' : 'Setup'}
           </button>
         </div>
       </div>
 
-      {/* Troubleshooting Guide */}
-      <div className="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-4 border border-yellow-200">
-        <h4 className="font-semibold text-yellow-800 mb-3 flex items-center">
+      {/* Quick Setup Guide */}
+      <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+        <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
           <AlertCircle className="h-4 w-4 mr-2" />
-          Troubleshooting Guide
+          Setup Cepat (3 Langkah)
         </h4>
-        <div className="text-sm text-yellow-700 space-y-2">
-          <p><strong>1. Pastikan Spreadsheet dibagikan:</strong></p>
-          <ul className="list-disc list-inside ml-4 space-y-1">
-            <li>Buka spreadsheet Anda</li>
-            <li>Klik tombol "Share" (Bagikan)</li>
-            <li>Set "General access" ke "Anyone with the link"</li>
-            <li>Set permission ke "Editor"</li>
-          </ul>
-          <p><strong>2. Pastikan API Key benar:</strong></p>
-          <ul className="list-disc list-inside ml-4 space-y-1">
-            <li>API Key harus dimulai dengan "AIza"</li>
-            <li>Google Sheets API harus diaktifkan</li>
-            <li>Tidak ada spasi di awal/akhir API Key</li>
-          </ul>
-          <a 
-            href="https://console.cloud.google.com/apis/library/sheets.googleapis.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
-          >
-            <ExternalLink className="h-3 w-3" />
-            <span>Aktifkan Google Sheets API</span>
-          </a>
+        <div className="text-sm text-blue-700 space-y-2">
+          <div className="flex items-start space-x-2">
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
+            <div>
+              <p><strong>Buat/Buka Google Sheets:</strong></p>
+              <button 
+                onClick={copyExampleUrl}
+                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                <Copy className="h-3 w-3" />
+                <span>Copy contoh spreadsheet</span>
+              </button>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
+            <div>
+              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Editor"</p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
+            <div>
+              <p><strong>Dapatkan API Key:</strong></p>
+              <a 
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                <ExternalLink className="h-3 w-3" />
+                <span>Google Cloud Console</span>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -219,10 +252,34 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
       
       {isExpanded && (
         <div className="space-y-6">
+          {/* URL Input for easy ID extraction */}
+          <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+            <h4 className="font-semibold text-yellow-800 mb-3 flex items-center">
+              <Link className="h-4 w-4 mr-2" />
+              Paste URL Spreadsheet (Opsional)
+            </h4>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="flex-1 px-3 py-2 bg-white border border-yellow-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+              <button
+                onClick={handleUrlExtract}
+                disabled={!urlInput}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                Extract ID
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Spreadsheet ID
+                Spreadsheet ID *
               </label>
               <input
                 type="text"
@@ -238,7 +295,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key
+                API Key *
               </label>
               <div className="relative">
                 <input
@@ -257,7 +314,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                API Key dari Google Cloud Console
+                API Key dari Google Cloud Console (harus dimulai dengan "AIza")
               </p>
             </div>
           </div>
@@ -335,7 +392,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                   <p className="font-medium">
                     {testResult.success ? 'Koneksi Berhasil!' : 'Koneksi Gagal'}
                   </p>
-                  <p className="mt-1">{testResult.message}</p>
+                  <pre className="mt-1 whitespace-pre-wrap">{testResult.message}</pre>
                 </div>
               </div>
             </div>
