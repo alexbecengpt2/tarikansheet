@@ -18,10 +18,13 @@ export const sendToGoogleSheets = async (
     throw new Error('Missing required configuration: spreadsheetId, apiKey, or range');
   }
   
+  // Ensure spreadsheetId is just the ID, not a URL
+  const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
+  
   // Clean the range to ensure proper formatting
   const cleanRange = encodeURIComponent(range);
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${apiKey}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${apiKey}`;
   
   console.log('Request URL:', url);
   
@@ -78,7 +81,7 @@ Error detail: ${errorData.error?.message || 'Unauthorized'}`);
 Error detail: ${errorData.error?.message || 'Forbidden'}`);
       } else if (response.status === 404) {
         throw new Error(`Spreadsheet tidak ditemukan (404). Solusi:
-1. Periksa Spreadsheet ID: ${spreadsheetId}
+1. Periksa Spreadsheet ID: ${cleanSpreadsheetId}
 2. Pastikan spreadsheet masih ada dan tidak dihapus
 3. Periksa nama sheet: "${config.sheetName}"
 4. Pastikan sheet dengan nama tersebut ada di spreadsheet
@@ -125,7 +128,10 @@ export const testSheetsConnection = async (config: SheetsConfig): Promise<{ succ
     return { success: false, message: 'API Key harus dimulai dengan "AIza". Periksa kembali API Key Anda.' };
   }
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?key=${apiKey}`;
+  // Ensure spreadsheetId is just the ID, not a URL
+  const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
   console.log('Test URL:', url);
   
   try {
@@ -161,7 +167,8 @@ export const testSheetsConnection = async (config: SheetsConfig): Promise<{ succ
         message: `✅ Koneksi berhasil! 
 Spreadsheet: "${data.properties?.title || 'Unknown'}"
 Sheets tersedia: ${sheetNames.join(', ')}
-${targetSheet ? `Target sheet "${targetSheet}" ✓` : ''}` 
+${targetSheet ? `Target sheet "${targetSheet}" ✓` : ''}
+Spreadsheet ID: ${cleanSpreadsheetId}` 
       };
     } else {
       let errorData;
@@ -181,7 +188,9 @@ Solusi:
 1. Pastikan API Key dimulai dengan "AIza"
 2. Buka Google Cloud Console
 3. Aktifkan Google Sheets API
-4. Buat API Key baru jika perlu` 
+4. Buat API Key baru jika perlu
+
+Current API Key: ${apiKey.substring(0, 10)}...` 
         };
       } else if (response.status === 403) {
         return { 
@@ -191,19 +200,24 @@ Solusi:
 1. Buka spreadsheet di Google Sheets
 2. Klik "Share" → "General access" → "Anyone with the link"
 3. Set permission ke "Editor"
-4. Pastikan Google Sheets API aktif di Google Cloud Console` 
+4. Pastikan Google Sheets API aktif di Google Cloud Console
+
+Spreadsheet ID: ${cleanSpreadsheetId}` 
         };
       } else if (response.status === 404) {
         return { 
           success: false, 
           message: `❌ Spreadsheet tidak ditemukan (404)
-Periksa Spreadsheet ID: ${spreadsheetId}
-Pastikan spreadsheet masih ada dan dapat diakses` 
+Periksa Spreadsheet ID: ${cleanSpreadsheetId}
+Pastikan spreadsheet masih ada dan dapat diakses
+
+Original input: ${spreadsheetId}` 
         };
       } else {
         return { 
           success: false, 
-          message: `❌ Error ${response.status}: ${errorData.error?.message || response.statusText}` 
+          message: `❌ Error ${response.status}: ${errorData.error?.message || response.statusText}
+Spreadsheet ID: ${cleanSpreadsheetId}` 
         };
       }
     }
@@ -213,7 +227,8 @@ Pastikan spreadsheet masih ada dan dapat diakses`
       success: false, 
       message: `❌ Tidak dapat terhubung ke Google Sheets API
 Error: ${error instanceof Error ? error.message : 'Unknown error'}
-Periksa koneksi internet Anda` 
+Periksa koneksi internet Anda
+Spreadsheet ID: ${cleanSpreadsheetId}` 
     };
   }
 };
@@ -221,7 +236,10 @@ Periksa koneksi internet Anda`
 export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> => {
   const { spreadsheetId, apiKey } = config;
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?key=${apiKey}`;
+  // Ensure spreadsheetId is just the ID, not a URL
+  const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
   
   try {
     const response = await fetch(url, {
@@ -248,9 +266,27 @@ export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> 
 };
 
 // Helper function to validate spreadsheet URL and extract ID
-export const extractSpreadsheetId = (url: string): string | null => {
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
+export const extractSpreadsheetId = (input: string): string | null => {
+  // If it's already just an ID (no slashes), return it
+  if (!input.includes('/')) {
+    return input.length > 20 ? input : null;
+  }
+  
+  // Extract from various Google Sheets URL formats
+  const patterns = [
+    /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/,
+    /\/spreadsheets\/u\/\d+\/d\/([a-zA-Z0-9-_]+)/,
+    /id=([a-zA-Z0-9-_]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = input.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
 };
 
 // Helper function to validate API key format

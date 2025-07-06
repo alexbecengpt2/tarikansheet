@@ -46,8 +46,21 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   };
 
   const handleChange = (field: keyof SheetsConfigType, value: string) => {
+    // If changing spreadsheetId, check if it's a URL and extract ID
+    if (field === 'spreadsheetId') {
+      const extractedId = extractSpreadsheetId(value);
+      if (extractedId && extractedId !== value) {
+        // It was a URL, use the extracted ID
+        value = extractedId;
+        setTestResult({ success: true, message: `✅ Spreadsheet ID berhasil diekstrak dari URL: ${extractedId}` });
+      }
+    }
+    
     setLocalConfig(prev => ({ ...prev, [field]: value }));
-    setTestResult(null);
+    
+    if (field !== 'spreadsheetId') {
+      setTestResult(null);
+    }
     
     // Update range when sheet name or columns change
     if (field === 'sheetName' || field === 'columns') {
@@ -66,7 +79,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     if (extractedId) {
       setLocalConfig(prev => ({ ...prev, spreadsheetId: extractedId }));
       setUrlInput('');
-      setTestResult(null);
+      setTestResult({ success: true, message: `✅ Spreadsheet ID berhasil diekstrak: ${extractedId}` });
     } else {
       setTestResult({ success: false, message: 'URL tidak valid. Pastikan URL adalah link Google Sheets yang benar.' });
     }
@@ -274,6 +287,9 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 Extract ID
               </button>
             </div>
+            <p className="text-xs text-yellow-700 mt-2">
+              💡 Tip: Paste URL lengkap Google Sheets untuk otomatis extract Spreadsheet ID
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -289,7 +305,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 className="w-full px-3 py-2 bg-white/80 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500 mt-1">
-                ID dari URL spreadsheet (setelah /d/ dan sebelum /edit)
+                ID dari URL spreadsheet atau paste URL lengkap di atas
               </p>
             </div>
             
