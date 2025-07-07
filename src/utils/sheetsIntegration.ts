@@ -1,8 +1,8 @@
 import { SheetsConfig, SheetInfo } from '../types';
 
-// OAuth2 configuration - Updated for your Google account
+// OAuth2 configuration - Updated with your Google Cloud Project credentials
 const OAUTH_CONFIG = {
-  clientId: '1234567890-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com', // Will need to be replaced with real client ID
+  clientId: '771720956420-1go2jk25iu72nppcdpc2059cgntfieaj.apps.googleusercontent.com',
   redirectUri: window.location.origin,
   scope: 'https://www.googleapis.com/auth/spreadsheets',
   responseType: 'token'
