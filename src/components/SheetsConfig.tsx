@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link, Key, Shield, User, Mail } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link } from 'lucide-react';
 import { SheetsConfig as SheetsConfigType, SheetInfo } from '../types';
-import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey, hasValidToken, initiateOAuth, getSetupGuideForUser } from '../utils/sheetsIntegration';
+import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey } from '../utils/sheetsIntegration';
 
 interface SheetsConfigProps {
   config: SheetsConfigType;
@@ -19,7 +19,6 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   const [savedConfigs, setSavedConfigs] = useState<SheetsConfigType[]>([]);
   const [showConfigManager, setShowConfigManager] = useState(false);
   const [urlInput, setUrlInput] = useState('');
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('text-to-sheets-configs');
@@ -28,29 +27,18 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     }
   }, []);
 
-  // Sync localConfig with prop config when it changes
-  useEffect(() => {
-    setLocalConfig(config);
-  }, [config]);
-
   const handleSave = () => {
-    // Ensure we're saving the clean spreadsheet ID
-    const cleanConfig = {
-      ...localConfig,
-      spreadsheetId: extractSpreadsheetId(localConfig.spreadsheetId) || localConfig.spreadsheetId
-    };
-    
-    onSave(cleanConfig);
+    onSave(localConfig);
     
     // Save to multiple configs
-    const existingIndex = savedConfigs.findIndex(c => c.sheetName === cleanConfig.sheetName);
+    const existingIndex = savedConfigs.findIndex(c => c.sheetName === localConfig.sheetName);
     let updatedConfigs;
     
     if (existingIndex >= 0) {
       updatedConfigs = [...savedConfigs];
-      updatedConfigs[existingIndex] = cleanConfig;
+      updatedConfigs[existingIndex] = localConfig;
     } else {
-      updatedConfigs = [...savedConfigs, cleanConfig];
+      updatedConfigs = [...savedConfigs, localConfig];
     }
     
     setSavedConfigs(updatedConfigs);
@@ -62,20 +50,13 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     if (field === 'spreadsheetId') {
       const extractedId = extractSpreadsheetId(value);
       if (extractedId && extractedId !== value) {
-        // It was a URL, use the extracted ID and auto-save
-        const newConfig = { ...localConfig, [field]: extractedId };
-        setLocalConfig(newConfig);
-        
-        // Auto-save the clean config
-        onSave(newConfig);
-        
+        // It was a URL, use the extracted ID
+        value = extractedId;
         setTestResult({ success: true, message: `✅ Spreadsheet ID berhasil diekstrak dari URL: ${extractedId}` });
-        return;
       }
     }
     
-    const newConfig = { ...localConfig, [field]: value };
-    setLocalConfig(newConfig);
+    setLocalConfig(prev => ({ ...prev, [field]: value }));
     
     if (field !== 'spreadsheetId') {
       setTestResult(null);
@@ -85,21 +66,18 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     if (field === 'sheetName' || field === 'columns') {
       const newSheetName = field === 'sheetName' ? value : localConfig.sheetName;
       const newColumns = field === 'columns' ? value : localConfig.columns;
-      newConfig.range = `${newSheetName}!${newColumns}`;
+      setLocalConfig(prev => ({ 
+        ...prev, 
+        [field]: value,
+        range: `${newSheetName}!${newColumns}`
+      }));
     }
-    
-    setLocalConfig(newConfig);
   };
 
   const handleUrlExtract = () => {
     const extractedId = extractSpreadsheetId(urlInput);
     if (extractedId) {
-      const newConfig = { ...localConfig, spreadsheetId: extractedId };
-      setLocalConfig(newConfig);
-      
-      // Auto-save the clean config
-      onSave(newConfig);
-      
+      setLocalConfig(prev => ({ ...prev, spreadsheetId: extractedId }));
       setUrlInput('');
       setTestResult({ success: true, message: `✅ Spreadsheet ID berhasil diekstrak: ${extractedId}` });
     } else {
@@ -108,12 +86,13 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   };
 
   const handleTestConnection = async () => {
-    // Ensure we test with clean ID
-    const cleanId = extractSpreadsheetId(localConfig.spreadsheetId) || localConfig.spreadsheetId;
-    const testConfig = { ...localConfig, spreadsheetId: cleanId };
-    
-    if (!cleanId) {
+    if (!localConfig.spreadsheetId) {
       setTestResult({ success: false, message: 'Harap isi Spreadsheet ID terlebih dahulu' });
+      return;
+    }
+
+    if (localConfig.apiKey && !validateApiKey(localConfig.apiKey)) {
+      setTestResult({ success: false, message: 'Format API Key tidak valid. API Key harus dimulai dengan "AIza"' });
       return;
     }
 
@@ -121,18 +100,13 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     setTestResult(null);
     
     try {
-      console.log('Starting connection test for sunanswapro@gmail.com...');
-      const result = await testSheetsConnection(testConfig);
+      console.log('Starting connection test...');
+      const result = await testSheetsConnection(localConfig);
       console.log('Test result:', result);
       setTestResult(result);
       
       if (result.success) {
-        // Auto-save the clean config after successful test
-        const cleanConfig = { ...localConfig, spreadsheetId: cleanId };
-        setLocalConfig(cleanConfig);
-        onSave(cleanConfig);
-        
-        loadAvailableSheets(testConfig);
+        loadAvailableSheets();
       }
     } catch (error) {
       console.error('Test connection error:', error);
@@ -142,10 +116,10 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     }
   };
 
-  const loadAvailableSheets = async (configToUse?: SheetsConfigType) => {
+  const loadAvailableSheets = async () => {
     setIsLoadingSheets(true);
     try {
-      const sheets = await getSheetsList(configToUse || localConfig);
+      const sheets = await getSheetsList(localConfig);
       setAvailableSheets(sheets);
     } catch (error) {
       console.error('Failed to load sheets:', error);
@@ -155,13 +129,11 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   };
 
   const selectSheet = (sheet: SheetInfo) => {
-    const newConfig = {
-      ...localConfig,
+    setLocalConfig(prev => ({
+      ...prev,
       sheetName: sheet.name,
-      range: `${sheet.name}!${localConfig.columns}`
-    };
-    setLocalConfig(newConfig);
-    onSave(newConfig);
+      range: `${sheet.name}!${prev.columns}`
+    }));
   };
 
   const loadConfig = (configToLoad: SheetsConfigType) => {
@@ -179,12 +151,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/1zcsm2DPVccpnOGz_9HkVotn9M9f6KRiA_-C2CNld6_c/edit');
   };
 
-  const handleOAuthLogin = () => {
-    initiateOAuth();
-  };
-
   const isConfigured = config.spreadsheetId;
-  const isAuthenticated = hasValidToken();
 
   return (
     <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/30 p-6 shadow-2xl">
@@ -195,19 +162,10 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           </div>
           <div>
             <h3 className="text-xl font-bold text-gray-800">Google Sheets Setup</h3>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Mail className="h-3 w-3" />
-              <span>sunanswapro@gmail.com</span>
-            </div>
+            <p className="text-sm text-gray-600">Konfigurasi koneksi ke spreadsheet</p>
           </div>
         </div>
         <div className="flex space-x-2">
-          <button
-            onClick={() => setShowSetupGuide(!showSetupGuide)}
-            className="text-sm text-blue-600 hover:text-blue-700 transition-colors font-medium"
-          >
-            {showSetupGuide ? 'Tutup Guide' : 'Setup Guide'}
-          </button>
           <button
             onClick={() => setShowConfigManager(!showConfigManager)}
             className="text-sm text-purple-600 hover:text-purple-700 transition-colors font-medium"
@@ -223,115 +181,17 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
         </div>
       </div>
 
-      {/* User Account Info */}
-      <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-blue-500 rounded-lg">
-            <User className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-blue-800">Target Account</h4>
-            <p className="text-sm text-blue-700">
-              📧 <strong>sunanswapro@gmail.com</strong> - Pastikan login dengan akun ini di Google Sheets
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Setup Guide */}
-      {showSetupGuide && (
-        <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
-          <h4 className="font-semibold text-green-800 mb-3 flex items-center">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Setup Guide untuk sunanswapro@gmail.com
-          </h4>
-          <div className="text-sm text-green-700 space-y-3">
-            <div className="bg-white/80 rounded-lg p-3">
-              <p className="font-semibold mb-2">📋 LANGKAH 1: Persiapan Spreadsheet</p>
-              <ul className="space-y-1 text-xs">
-                <li>• 📧 Login ke Google dengan: <strong>sunanswapro@gmail.com</strong></li>
-                <li>• 📂 Buka Google Sheets: <a href="https://sheets.google.com" target="_blank" className="text-blue-600 underline">sheets.google.com</a></li>
-                <li>• 📄 Buat spreadsheet baru atau buka yang sudah ada</li>
-                <li>• 🔗 Copy URL spreadsheet</li>
-              </ul>
-            </div>
-            <div className="bg-white/80 rounded-lg p-3">
-              <p className="font-semibold mb-2">📤 LANGKAH 2: Share Spreadsheet</p>
-              <ul className="space-y-1 text-xs">
-                <li>• 🔗 Klik tombol "Share" di kanan atas</li>
-                <li>• 🌐 Ubah "General access" menjadi "Anyone with the link"</li>
-                <li>• ✏️ Set permission ke "Editor" (untuk write) atau "Viewer" (untuk read)</li>
-                <li>• ✅ Klik "Done"</li>
-              </ul>
-            </div>
-            <div className="bg-white/80 rounded-lg p-3">
-              <p className="font-semibold mb-2">⚙️ LANGKAH 3: Konfigurasi Aplikasi</p>
-              <ul className="space-y-1 text-xs">
-                <li>• 📋 Paste URL spreadsheet di form di bawah</li>
-                <li>• 📊 Pilih nama sheet yang akan digunakan</li>
-                <li>• 📏 Pilih range kolom (A:B, A:C, dll)</li>
-                <li>• 🧪 Klik "Test Koneksi" untuk verifikasi</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Authentication Status */}
-      <div className={`mb-6 rounded-xl p-4 border ${
-        isAuthenticated 
-          ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
-          : 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              isAuthenticated ? 'bg-green-500' : 'bg-yellow-500'
-            }`}>
-              {isAuthenticated ? (
-                <Shield className="h-4 w-4 text-white" />
-              ) : (
-                <Key className="h-4 w-4 text-white" />
-              )}
-            </div>
-            <div>
-              <h4 className={`font-semibold ${
-                isAuthenticated ? 'text-green-800' : 'text-yellow-800'
-              }`}>
-                {isAuthenticated ? 'OAuth Authenticated' : 'Authentication Required'}
-              </h4>
-              <p className={`text-sm ${
-                isAuthenticated ? 'text-green-700' : 'text-yellow-700'
-              }`}>
-                {isAuthenticated 
-                  ? 'Anda dapat mengirim data langsung ke Google Sheets'
-                  : 'Diperlukan untuk auto-send ke Google Sheets (sunanswapro@gmail.com)'
-                }
-              </p>
-            </div>
-          </div>
-          {!isAuthenticated && (
-            <button
-              onClick={handleOAuthLogin}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
-            >
-              Login Google
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Quick Setup Guide */}
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
           <AlertCircle className="h-4 w-4 mr-2" />
-          Setup Cepat untuk sunanswapro@gmail.com
+          Setup Cepat (3 Langkah)
         </h4>
         <div className="text-sm text-blue-700 space-y-2">
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
             <div>
-              <p><strong>Buka/Buat Google Sheets dengan akun sunanswapro@gmail.com</strong></p>
+              <p><strong>Buat/Buka Google Sheets:</strong></p>
               <button 
                 onClick={copyExampleUrl}
                 className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
@@ -350,14 +210,18 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
             <div>
-              <p><strong>Paste URL di form bawah dan test koneksi</strong></p>
+              <p><strong>Dapatkan API Key (opsional):</strong></p>
+              <a 
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                <ExternalLink className="h-3 w-3" />
+                <span>Google Cloud Console</span>
+              </a>
             </div>
           </div>
-        </div>
-        <div className="mt-3 p-3 bg-blue-100 rounded-lg">
-          <p className="text-xs text-blue-800">
-            <strong>💡 Catatan:</strong> Pastikan login dengan akun <strong>sunanswapro@gmail.com</strong> di Google Sheets
-          </p>
         </div>
       </div>
 
@@ -405,7 +269,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
             <h4 className="font-semibold text-yellow-800 mb-3 flex items-center">
               <Link className="h-4 w-4 mr-2" />
-              Paste URL Spreadsheet (sunanswapro@gmail.com)
+              Paste URL Spreadsheet (Opsional)
             </h4>
             <div className="flex space-x-2">
               <input
@@ -452,9 +316,9 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
               <div className="relative">
                 <input
                   type={showApiKey ? 'text' : 'password'}
-                  value={localConfig.apiKey}
+                  value={localConfig.apiKey || ''}
                   onChange={(e) => handleChange('apiKey', e.target.value)}
-                  placeholder="AIzaSy... (opsional untuk read-only)"
+                  placeholder="AIzaSy... (opsional untuk public sheets)"
                   className="w-full px-3 py-2 pr-10 bg-white/80 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
@@ -466,7 +330,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Hanya untuk read access. Gunakan OAuth untuk write access.
+                Hanya diperlukan untuk private sheets atau rate limiting
               </p>
             </div>
           </div>
@@ -480,7 +344,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 type="text"
                 value={localConfig.sheetName}
                 onChange={(e) => handleChange('sheetName', e.target.value)}
-                placeholder="Data Tarikan"
+                placeholder="Sheet1"
                 className="w-full px-3 py-2 bg-white/80 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -594,21 +458,9 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </>
               )}
             </div>
-            <div className="flex items-center space-x-2">
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                isAuthenticated 
-                  ? 'bg-green-100 text-green-700' 
-                  : 'bg-yellow-100 text-yellow-700'
-              }`}>
-                {isAuthenticated ? 'OAuth ✓' : 'No Auth'}
-              </span>
-              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-                {savedConfigs.length} configs
-              </span>
-              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                sunanswapro@gmail.com
-              </span>
-            </div>
+            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+              {savedConfigs.length} configs
+            </span>
           </div>
           {isConfigured && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">

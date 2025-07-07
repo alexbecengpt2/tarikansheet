@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Send, Eye, Loader2, Settings, ChevronDown, Copy, Download, AlertTriangle } from 'lucide-react';
 import { SheetsConfig } from '../types';
-import { hasValidToken, copyToClipboard, exportAsCSV } from '../utils/sheetsIntegration';
 
 interface PreviewTableProps {
   data: string[][];
@@ -9,6 +8,33 @@ interface PreviewTableProps {
   isProcessing: boolean;
   config: SheetsConfig;
 }
+
+// Helper functions for alternative methods
+const exportAsCSV = (data: string[][]): string => {
+  return data.map(row => 
+    row.map(cell => 
+      // Escape cells that contain commas, quotes, or newlines
+      cell.includes(',') || cell.includes('"') || cell.includes('\n') 
+        ? `"${cell.replace(/"/g, '""')}"` 
+        : cell
+    ).join(',')
+  ).join('\n');
+};
+
+const copyToClipboard = async (data: string[][]): Promise<void> => {
+  const csvData = exportAsCSV(data);
+  try {
+    await navigator.clipboard.writeText(csvData);
+  } catch (error) {
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = csvData;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+  }
+};
 
 const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isProcessing, config }) => {
   const [showQuickConfigs, setShowQuickConfigs] = useState(false);
@@ -58,7 +84,6 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
   };
 
   const columnHeaders = getColumnHeaders();
-  const isAuthenticated = hasValidToken();
 
   return (
     <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/30 p-6 shadow-2xl">
@@ -120,21 +145,14 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
           <button
             onClick={() => handleQuickSend()}
             disabled={isProcessing}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg ${
-              isAuthenticated 
-                ? 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white'
-                : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white cursor-not-allowed'
-            }`}
-            title={!isAuthenticated ? 'OAuth authentication diperlukan untuk auto-send' : ''}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg"
           >
             {isProcessing ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <Send className="h-5 w-5" />
             )}
-            <span className="font-medium">
-              {isProcessing ? 'Mengirim...' : isAuthenticated ? 'Kirim ke Sheets' : 'Auth Required'}
-            </span>
+            <span className="font-medium">{isProcessing ? 'Mengirim...' : 'Kirim ke Sheets'}</span>
           </button>
         </div>
       </div>
@@ -144,7 +162,7 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
         <div className="mb-6 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4 border border-orange-200">
           <h4 className="font-semibold text-orange-800 mb-3 flex items-center">
             <AlertTriangle className="h-4 w-4 mr-2" />
-            Metode Alternatif (Tanpa OAuth)
+            Metode Alternatif (Manual)
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <button
@@ -170,24 +188,8 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
             </button>
           </div>
           <p className="text-xs text-orange-700 mt-3">
-            💡 Tip: Gunakan metode ini jika auto-send tidak bekerja karena masalah authentication
+            💡 Tip: Gunakan metode ini jika auto-send tidak bekerja atau untuk spreadsheet private
           </p>
-        </div>
-      )}
-
-      {/* Authentication warning */}
-      {!isAuthenticated && (
-        <div className="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-4 border border-yellow-200">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-            <div>
-              <h4 className="font-semibold text-yellow-800">Authentication Required</h4>
-              <p className="text-sm text-yellow-700 mt-1">
-                Google Sheets API memerlukan OAuth2 authentication untuk operasi write. 
-                Gunakan metode alternatif di atas atau implementasi OAuth2.
-              </p>
-            </div>
-          </div>
         </div>
       )}
       
