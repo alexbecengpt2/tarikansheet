@@ -9,6 +9,7 @@ import QuickSendButton from './components/QuickSendButton';
 import { parseTextToColumns } from './utils/textParser';
 import { sendToGoogleSheets } from './utils/sheetsIntegration';
 import { HistoryEntry, SheetsConfig as SheetsConfigType } from './types';
+import { googleAuth } from './utils/googleAuth';
 
 function App() {
   const [inputText, setInputText] = useState('');
@@ -100,8 +101,13 @@ function App() {
       return;
     }
 
-    if (!configToUse.spreadsheetId || !configToUse.apiKey) {
-      showNotification('Silakan lengkapi konfigurasi Google Sheets (Spreadsheet ID dan API Key)', 'error');
+    if (!configToUse.spreadsheetId) {
+      showNotification('Silakan masukkan Spreadsheet ID di konfigurasi', 'error');
+      return;
+    }
+    
+    if (!googleAuth.isSignedIn()) {
+      showNotification('Silakan login dengan Google terlebih dahulu untuk mengirim data', 'error');
       return;
     }
 
@@ -147,8 +153,13 @@ function App() {
   };
 
   const handleQuickSend = async (text: string) => {
-    if (!sheetsConfig.apiKey || !sheetsConfig.spreadsheetId) {
-      showNotification('Konfigurasi Google Sheets belum lengkap (perlu API Key dan Spreadsheet ID)', 'error');
+    if (!sheetsConfig.spreadsheetId) {
+      showNotification('Konfigurasi Google Sheets belum lengkap (perlu Spreadsheet ID)', 'error');
+      return;
+    }
+    
+    if (!googleAuth.isSignedIn()) {
+      showNotification('Silakan login dengan Google terlebih dahulu untuk quick send', 'error');
       return;
     }
 

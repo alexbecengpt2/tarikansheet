@@ -1,4 +1,5 @@
 import { SheetsConfig, SheetInfo } from '../types';
+import { googleAuth } from './googleAuth';
 
 export const sendToGoogleSheets = async (
   data: string[][],
@@ -9,6 +10,7 @@ export const sendToGoogleSheets = async (
   console.log('Sending to Google Sheets:', {
     spreadsheetId,
     apiKey: apiKey ? apiKey.substring(0, 10) + '...' : 'not provided',
+    hasAccessToken: !!googleAuth.getAccessToken(),
     range,
     dataRows: data.length
   });
@@ -18,17 +20,17 @@ export const sendToGoogleSheets = async (
     throw new Error('Missing required configuration: spreadsheetId or range');
   }
   
-  // Check if API key is provided and valid
-  if (!apiKey || !validateApiKey(apiKey)) {
-    throw new Error(`API Key diperlukan untuk mengakses Google Sheets. Solusi:
+  // For write operations, we need OAuth access token
+  const accessToken = googleAuth.getAccessToken();
+  if (!accessToken) {
+    throw new Error(`OAuth authentication diperlukan untuk menulis ke Google Sheets. Solusi:
 
-1. Buka Google Cloud Console: https://console.cloud.google.com/
-2. Buat atau pilih project
-3. Aktifkan Google Sheets API
-4. Buat API Key di "Credentials"
-5. Copy API Key dan paste di konfigurasi
+1. Klik tombol "Sign in with Google" di konfigurasi
+2. Berikan izin akses ke Google Sheets
+3. Coba kirim data lagi setelah login berhasil
 
-API Key harus dimulai dengan "AIza" dan memiliki panjang minimal 20 karakter.
+Catatan: Google Sheets API memerlukan OAuth 2.0 untuk operasi tulis data.
+API Key hanya bisa digunakan untuk membaca data public.
 
 Alternatif: Gunakan metode manual copy-paste dari preview table.`);
   }
@@ -39,8 +41,8 @@ Alternatif: Gunakan metode manual copy-paste dari preview table.`);
   // Clean the range to ensure proper formatting
   const cleanRange = encodeURIComponent(range);
   
-  // Always use API key for authentication
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${apiKey}`;
+  // Use OAuth access token for write operations
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
   
   console.log('Request URL:', url);
   
@@ -55,6 +57,7 @@ Alternatif: Gunakan metode manual copy-paste dari preview table.`);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
@@ -79,18 +82,18 @@ Alternatif: Gunakan metode manual copy-paste dari preview table.`);
       
       // Handle specific error cases with more detailed messages
       if (response.status === 401) {
-        throw new Error(`API Key tidak valid atau tidak memiliki akses (401). Solusi:
+        throw new Error(`Authentication gagal (401). Solusi:
 
-1. Pastikan API Key dimulai dengan "AIza"
-2. Buka Google Cloud Console: https://console.cloud.google.com/
-3. Pastikan Google Sheets API sudah diaktifkan
-4. Periksa quota dan billing di Google Cloud Console
-5. Buat API Key baru jika perlu
-6. Pastikan tidak ada spasi di awal/akhir API Key
+1. Klik "Sign in with Google" untuk login ulang
+2. Pastikan memberikan izin akses ke Google Sheets
+3. Periksa apakah token sudah expired
+4. Logout dan login kembali jika masalah berlanjut
 
-Current API Key: ${apiKey ? apiKey.substring(0, 15) + '...' : 'not provided'}
+OAuth Status: ${accessToken ? 'Token tersedia' : 'Tidak ada token'}
 
-Error detail: ${errorData.error?.message || 'Unauthorized'}`);
+Error detail: ${errorData.error?.message || 'Unauthorized'}
+
+Catatan: Google Sheets API memerlukan OAuth 2.0 untuk operasi tulis.`);
       } else if (response.status === 403) {
         throw new Error(`Akses ditolak (403). Kemungkinan penyebab:
 
@@ -101,13 +104,11 @@ A. Spreadsheet tidak public:
 4. Set permission ke "Editor"
 
 B. API Key restrictions:
-5. Buka Google Cloud Console → Credentials
-6. Edit API Key dan periksa "API restrictions"
-7. Pastikan Google Sheets API diizinkan
-8. Periksa "Application restrictions" jika ada
+5. Pastikan OAuth client ID dikonfigurasi dengan benar
+6. Periksa scope yang diminta (spreadsheets access)
 
 C. Quota exceeded:
-9. Periksa quota usage di Google Cloud Console
+7. Periksa quota usage di Google Cloud Console
 
 Error detail: ${errorData.error?.message || 'Forbidden'}`);
       } else if (response.status === 404) {
@@ -161,11 +162,12 @@ Error detail: ${errorData.error?.message || 'Too Many Requests'}`);
 };
 
 export const testSheetsConnection = async (config: SheetsConfig): Promise<{ success: boolean; message: string }> => {
-  const { spreadsheetId, apiKey } = config;
+  const { spreadsheetId } = config;
   
   console.log('Testing connection:', {
     spreadsheetId,
-    apiKey: apiKey ? apiKey.substring(0, 10) + '...' : 'not provided'
+    hasAccessToken: !!googleAuth.getAccessToken(),
+    isSignedIn: googleAuth.isSignedIn()
   });
   
   // Validate inputs
@@ -173,23 +175,29 @@ export const testSheetsConnection = async (config: SheetsConfig): Promise<{ succ
     return { success: false, message: 'Spreadsheet ID harus diisi' };
   }
   
-  if (!apiKey) {
+  // For testing, we can use API key for read-only access to check if spreadsheet exists
+  // But for write operations, OAuth is required
+  const accessToken = googleAuth.getAccessToken();
+  const apiKey = config.apiKey;
+  
+  if (!accessToken && !apiKey) {
     return { 
       success: false, 
-      message: `❌ API Key diperlukan untuk mengakses Google Sheets
+      message: `❌ Authentication diperlukan untuk mengakses Google Sheets
 
-Langkah-langkah mendapatkan API Key:
-1. Buka: https://console.cloud.google.com/
-2. Buat atau pilih project
-3. Aktifkan Google Sheets API
-4. Buka "Credentials" → "Create Credentials" → "API Key"
-5. Copy API Key dan paste di sini
+Untuk test koneksi (read-only): Masukkan API Key
+Untuk kirim data (write): Klik "Sign in with Google"
 
-API Key harus dimulai dengan "AIza"` 
+Langkah setup:
+1. Buka Google Cloud Console: https://console.cloud.google.com/
+2. Aktifkan Google Sheets API
+3. Buat OAuth 2.0 Client ID untuk web application
+4. Tambahkan domain ini ke authorized origins
+5. Masukkan Client ID di konfigurasi` 
     };
   }
   
-  if (!validateApiKey(apiKey)) {
+  if (apiKey && !validateApiKey(apiKey)) {
     return { 
       success: false, 
       message: `❌ Format API Key tidak valid
@@ -206,15 +214,26 @@ Current: ${apiKey.substring(0, 10)}... (${apiKey.length} chars)`
   // Ensure spreadsheetId is just the ID, not a URL
   const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
+  // Use OAuth token if available, otherwise fall back to API key for read-only test
+  let url: string;
+  let headers: Record<string, string> = {
+    'Accept': 'application/json'
+  };
+  
+  if (accessToken) {
+    url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}`;
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  } else if (apiKey) {
+    url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
+  } else {
+    return { success: false, message: 'No authentication method available' };
+  }
   
   console.log('Test URL:', url);
   
   try {
     const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json'
-      }
+      headers
     });
     
     console.log('Test response status:', response.status);
@@ -246,15 +265,15 @@ Solusi:
       
       return { 
         success: true, 
-        message: `✅ Koneksi berhasil!
+        message: `✅ Koneksi berhasil! ${accessToken ? '(OAuth)' : '(API Key)'}
 
 📊 Spreadsheet: "${data.properties?.title || 'Unknown'}"
 📋 Sheets tersedia: ${sheetNames.join(', ')}
 ${targetSheet ? `🎯 Target sheet "${targetSheet}" ✓` : ''}
-🔑 API Key: ${apiKey.substring(0, 15)}...
+${accessToken ? '🔐 OAuth: Authenticated ✓' : `🔑 API Key: ${apiKey?.substring(0, 15)}...`}
 📄 Spreadsheet ID: ${cleanSpreadsheetId}
 
-Siap untuk mengirim data!` 
+${accessToken ? 'Siap untuk mengirim data!' : 'Login dengan Google untuk mengirim data.'}` 
       };
     } else {
       let errorData;
@@ -269,21 +288,17 @@ Siap untuk mengirim data!`
       if (response.status === 401) {
         return { 
           success: false, 
-          message: `❌ API Key tidak valid (401)
+          message: `❌ Authentication gagal (401)
 
-Kemungkinan penyebab:
-1. API Key salah atau expired
+${accessToken ? 'OAuth token issue:' : 'API Key issue:'}
+${accessToken ? '1. Token mungkin expired, coba login ulang' : '1. API Key salah atau expired'}
 2. Google Sheets API belum diaktifkan
 3. Billing belum diaktifkan di Google Cloud
+${accessToken ? '4. Scope tidak mencakup spreadsheets access' : '4. API Key restrictions'}
 
-Solusi:
-1. Buka: https://console.cloud.google.com/
-2. Pilih project yang benar
-3. Aktifkan Google Sheets API
-4. Periksa billing status
-5. Buat API Key baru jika perlu
+Solusi: ${accessToken ? 'Logout dan login ulang dengan Google' : 'Periksa API Key atau gunakan OAuth login'}
 
-Current API Key: ${apiKey.substring(0, 15)}...` 
+Auth method: ${accessToken ? 'OAuth' : 'API Key'}` 
         };
       } else if (response.status === 403) {
         return { 
@@ -341,7 +356,7 @@ Spreadsheet ID: ${cleanSpreadsheetId}`
           message: `❌ Error ${response.status}: ${errorData.error?.message || response.statusText}
 
 Spreadsheet ID: ${cleanSpreadsheetId}
-API Key: ${apiKey.substring(0, 15)}...
+API Key: ${apiKey?.substring(0, 15)}...
 
 Coba:
 1. Refresh halaman dan ulangi
@@ -370,9 +385,12 @@ Spreadsheet ID: ${cleanSpreadsheetId}`
 };
 
 export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> => {
-  const { spreadsheetId, apiKey } = config;
+  const { spreadsheetId } = config;
   
-  if (!apiKey || !validateApiKey(apiKey)) {
+  const accessToken = googleAuth.getAccessToken();
+  const apiKey = config.apiKey;
+  
+  if (!accessToken && (!apiKey || !validateApiKey(apiKey))) {
     console.warn('Cannot fetch sheets list without valid API key');
     return [];
   }
@@ -380,13 +398,21 @@ export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> 
   // Ensure spreadsheetId is just the ID, not a URL
   const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
+  let url: string;
+  let headers: Record<string, string> = {
+    'Accept': 'application/json'
+  };
+  
+  if (accessToken) {
+    url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}`;
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  } else {
+    url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
+  }
   
   try {
     const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json'
-      }
+      headers
     });
     
     if (!response.ok) {

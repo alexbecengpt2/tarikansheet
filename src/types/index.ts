@@ -1,9 +1,19 @@
 export interface SheetsConfig {
   spreadsheetId: string;
   apiKey?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiry?: number;
   range: string;
   sheetName: string;
   columns: string;
+}
+
+export interface GoogleAuthConfig {
+  clientId: string;
+  isSignedIn: boolean;
+  userEmail?: string;
+  accessToken?: string;
 }
 
 export interface HistoryEntry {

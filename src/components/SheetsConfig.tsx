@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link } from 'lucide-react';
-import { SheetsConfig as SheetsConfigType, SheetInfo } from '../types';
+import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link, LogIn, LogOut, User } from 'lucide-react';
+import { SheetsConfig as SheetsConfigType, SheetInfo, GoogleAuthConfig } from '../types';
 import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey } from '../utils/sheetsIntegration';
+import { googleAuth } from '../utils/googleAuth';
 
 interface SheetsConfigProps {
   config: SheetsConfigType;
@@ -19,14 +20,79 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   const [savedConfigs, setSavedConfigs] = useState<SheetsConfigType[]>([]);
   const [showConfigManager, setShowConfigManager] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [googleAuthConfig, setGoogleAuthConfig] = useState<GoogleAuthConfig>({
+    clientId: '',
+    isSignedIn: false
+  });
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null);
 
   useEffect(() => {
+    // Check if user is already signed in
+    const checkAuthStatus = async () => {
+      if (googleAuth.isSignedIn()) {
+        setGoogleAuthConfig(prev => ({ ...prev, isSignedIn: true }));
+        const user = await googleAuth.getCurrentUser();
+        setCurrentUser(user);
+      }
+    };
+    
+    checkAuthStatus();
+    
     const saved = localStorage.getItem('text-to-sheets-configs');
     if (saved) {
       setSavedConfigs(JSON.parse(saved));
     }
   }, []);
 
+  const handleGoogleSignIn = async () => {
+    if (!googleAuthConfig.clientId) {
+      setTestResult({ 
+        success: false, 
+        message: 'Masukkan Google OAuth Client ID terlebih dahulu' 
+      });
+      return;
+    }
+    
+    setIsSigningIn(true);
+    try {
+      await googleAuth.initialize(googleAuthConfig.clientId);
+      const authResult = await googleAuth.signIn();
+      setGoogleAuthConfig(authResult);
+      
+      const user = await googleAuth.getCurrentUser();
+      setCurrentUser(user);
+      
+      setTestResult({ 
+        success: true, 
+        message: `✅ Berhasil login sebagai ${user?.email || 'user'}! Sekarang Anda bisa mengirim data ke Google Sheets.` 
+      });
+    } catch (error) {
+      setTestResult({ 
+        success: false, 
+        message: `Gagal login: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+  
+  const handleGoogleSignOut = async () => {
+    try {
+      await googleAuth.signOut();
+      setGoogleAuthConfig({ clientId: googleAuthConfig.clientId, isSignedIn: false });
+      setCurrentUser(null);
+      setTestResult({ 
+        success: true, 
+        message: 'Berhasil logout dari Google' 
+      });
+    } catch (error) {
+      setTestResult({ 
+        success: false, 
+        message: `Gagal logout: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  };
   const handleSave = () => {
     onSave(localConfig);
     
@@ -151,7 +217,8 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/1zcsm2DPVccpnOGz_9HkVotn9M9f6KRiA_-C2CNld6_c/edit');
   };
 
-  const isConfigured = config.spreadsheetId;
+  const isConfigured = config.spreadsheetId && googleAuthConfig.clientId;
+  const canSendData = isConfigured && googleAuthConfig.isSignedIn;
 
   return (
     <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/30 p-6 shadow-2xl">
@@ -185,13 +252,13 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
           <AlertCircle className="h-4 w-4 mr-2" />
-          Setup Cepat (4 Langkah)
+          Setup Cepat (5 Langkah)
         </h4>
         <div className="text-sm text-blue-700 space-y-2">
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
             <div>
-              <p><strong>Dapatkan API Key:</strong></p>
+              <p><strong>Setup Google Cloud Console:</strong></p>
               <a 
                 href="https://console.cloud.google.com/apis/credentials"
                 target="_blank"
@@ -199,7 +266,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
               >
                 <ExternalLink className="h-3 w-3" />
-                <span>Google Cloud Console</span>
+                <span>Buat OAuth 2.0 Client ID</span>
               </a>
             </div>
           </div>
@@ -219,13 +286,19 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
             <div>
-              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Editor"</p>
+              <p><strong>Masukkan Client ID:</strong> Copy OAuth Client ID ke form di bawah</p>
             </div>
           </div>
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">4</span>
             <div>
-              <p><strong>Masukkan API Key dan Spreadsheet ID:</strong> Test koneksi untuk memastikan setup benar</p>
+              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Editor"</p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">5</span>
+            <div>
+              <p><strong>Login dengan Google:</strong> Klik "Sign in with Google" untuk authenticate</p>
             </div>
           </div>
         </div>
@@ -271,6 +344,65 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
       
       {isExpanded && (
         <div className="space-y-6">
+          {/* Google OAuth Configuration */}
+          <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+            <h4 className="font-semibold text-green-800 mb-3 flex items-center">
+              <User className="h-4 w-4 mr-2" />
+              Google OAuth 2.0 Setup (Required untuk Write Access)
+            </h4>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-green-700 mb-2">
+                  Google OAuth Client ID *
+                </label>
+                <input
+                  type="text"
+                  value={googleAuthConfig.clientId}
+                  onChange={(e) => setGoogleAuthConfig(prev => ({ ...prev, clientId: e.target.value }))}
+                  placeholder="123456789-abcdefghijklmnop.apps.googleusercontent.com"
+                  className="w-full px-3 py-2 bg-white border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <p className="text-xs text-green-600 mt-1">
+                  Dapatkan dari Google Cloud Console → Credentials → OAuth 2.0 Client IDs
+                </p>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                {googleAuthConfig.isSignedIn ? (
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                      <span className="text-green-700 font-medium">
+                        Signed in as {currentUser?.email || 'user'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleGoogleSignOut}
+                      className="flex items-center space-x-2 px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleGoogleSignIn}
+                    disabled={isSigningIn || !googleAuthConfig.clientId}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {isSigningIn ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogIn className="h-4 w-4" />
+                    )}
+                    <span>{isSigningIn ? 'Signing in...' : 'Sign in with Google'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* URL Input for easy ID extraction */}
           <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
             <h4 className="font-semibold text-yellow-800 mb-3 flex items-center">
@@ -317,14 +449,14 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key *
+                API Key (Optional - untuk test koneksi saja)
               </label>
               <div className="relative">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={localConfig.apiKey || ''}
                   onChange={(e) => handleChange('apiKey', e.target.value)}
-                  placeholder="AIzaSy... (wajib diisi)"
+                  placeholder="AIzaSy... (opsional, hanya untuk test)"
                   className="w-full px-3 py-2 pr-10 bg-white/80 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
@@ -336,7 +468,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Diperlukan untuk mengakses Google Sheets API. Dapatkan di Google Cloud Console.
+                Hanya untuk test koneksi read-only. Untuk menulis data, gunakan OAuth di atas.
               </p>
             </div>
           </div>
@@ -452,10 +584,15 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
         <div className="text-sm text-gray-600">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              {isConfigured ? (
+              {canSendData ? (
                 <>
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-green-700 font-medium">Terkonfigurasi</span>
+                  <span className="text-green-700 font-medium">Siap kirim data</span>
+                </>
+              ) : isConfigured ? (
+                <>
+                  <AlertCircle className="w-5 h-5 text-yellow-500" />
+                  <span className="text-yellow-700 font-medium">Perlu login Google</span>
                 </>
               ) : (
                 <>
@@ -473,6 +610,9 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
               <p className="font-medium text-gray-800">Current: {config.sheetName}</p>
               <p className="text-xs text-gray-600">Range: {config.columns}</p>
               <p className="text-xs text-gray-500">ID: {config.spreadsheetId.substring(0, 20)}...</p>
+              <p className="text-xs text-gray-500">
+                OAuth: {googleAuthConfig.isSignedIn ? '✅ Authenticated' : '❌ Not signed in'}
+              </p>
             </div>
           )}
         </div>
