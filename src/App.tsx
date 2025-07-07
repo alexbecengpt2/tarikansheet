@@ -7,7 +7,7 @@ import HistoryPanel from './components/HistoryPanel';
 import ExtensionPanel from './components/ExtensionPanel';
 import QuickSendButton from './components/QuickSendButton';
 import { parseTextToColumns } from './utils/textParser';
-import { sendToGoogleSheets } from './utils/sheetsIntegration';
+import { sendToGoogleSheets, extractSpreadsheetId } from './utils/sheetsIntegration';
 import { HistoryEntry, SheetsConfig as SheetsConfigType } from './types';
 
 function App() {
@@ -38,7 +38,10 @@ function App() {
     
     const savedConfig = localStorage.getItem('text-to-sheets-config');
     if (savedConfig) {
-      setSheetsConfig(JSON.parse(savedConfig));
+      const config = JSON.parse(savedConfig);
+      // Ensure spreadsheet ID is clean
+      config.spreadsheetId = extractSpreadsheetId(config.spreadsheetId) || config.spreadsheetId;
+      setSheetsConfig(config);
     }
 
     // Listen for text selection events
@@ -95,19 +98,25 @@ function App() {
   const handleSendToSheets = async (customConfig?: SheetsConfigType) => {
     const configToUse = customConfig || sheetsConfig;
     
+    // Ensure we're using clean spreadsheet ID
+    const cleanConfig = {
+      ...configToUse,
+      spreadsheetId: extractSpreadsheetId(configToUse.spreadsheetId) || configToUse.spreadsheetId
+    };
+    
     if (!parsedData.length) {
       showNotification('Silakan masukkan teks terlebih dahulu', 'error');
       return;
     }
 
-    if (!configToUse.spreadsheetId || !configToUse.apiKey) {
+    if (!cleanConfig.spreadsheetId || !cleanConfig.apiKey) {
       showNotification('Silakan konfigurasi Google Sheets terlebih dahulu', 'error');
       return;
     }
 
     setIsProcessing(true);
     try {
-      await sendToGoogleSheets(parsedData, configToUse);
+      await sendToGoogleSheets(parsedData, cleanConfig);
       
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
@@ -115,7 +124,7 @@ function App() {
         originalText: inputText,
         parsedData: parsedData,
         success: true,
-        sheetName: configToUse.sheetName
+        sheetName: cleanConfig.sheetName
       };
       
       const updatedHistory = [newEntry, ...history];
@@ -124,7 +133,7 @@ function App() {
       
       setInputText('');
       setSelectedText('');
-      showNotification(`Data berhasil dikirim ke sheet "${configToUse.sheetName}"!`, 'success');
+      showNotification(`Data berhasil dikirim ke sheet "${cleanConfig.sheetName}"!`, 'success');
     } catch (error) {
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
@@ -133,7 +142,7 @@ function App() {
         parsedData: parsedData,
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        sheetName: configToUse.sheetName
+        sheetName: cleanConfig.sheetName
       };
       
       const updatedHistory = [newEntry, ...history];
@@ -153,9 +162,15 @@ function App() {
       return;
     }
 
+    // Ensure we're using clean spreadsheet ID
+    const cleanConfig = {
+      ...sheetsConfig,
+      spreadsheetId: extractSpreadsheetId(sheetsConfig.spreadsheetId) || sheetsConfig.spreadsheetId
+    };
+
     setIsProcessing(true);
     try {
-      await sendToGoogleSheets(parsed, sheetsConfig);
+      await sendToGoogleSheets(parsed, cleanConfig);
       
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
@@ -163,7 +178,7 @@ function App() {
         originalText: text,
         parsedData: parsed,
         success: true,
-        sheetName: sheetsConfig.sheetName
+        sheetName: cleanConfig.sheetName
       };
       
       const updatedHistory = [newEntry, ...history];
@@ -171,7 +186,7 @@ function App() {
       localStorage.setItem('text-to-sheets-history', JSON.stringify(updatedHistory));
       
       setSelectedText('');
-      showNotification(`Quick send berhasil ke sheet "${sheetsConfig.sheetName}"!`, 'success');
+      showNotification(`Quick send berhasil ke sheet "${cleanConfig.sheetName}"!`, 'success');
     } catch (error) {
       showNotification('Gagal mengirim data dengan quick send', 'error');
     } finally {
@@ -180,8 +195,14 @@ function App() {
   };
 
   const handleConfigSave = (config: SheetsConfigType) => {
-    setSheetsConfig(config);
-    localStorage.setItem('text-to-sheets-config', JSON.stringify(config));
+    // Ensure we're saving clean spreadsheet ID
+    const cleanConfig = {
+      ...config,
+      spreadsheetId: extractSpreadsheetId(config.spreadsheetId) || config.spreadsheetId
+    };
+    
+    setSheetsConfig(cleanConfig);
+    localStorage.setItem('text-to-sheets-config', JSON.stringify(cleanConfig));
     showNotification('Konfigurasi Google Sheets tersimpan', 'success');
   };
 

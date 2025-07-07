@@ -27,18 +27,29 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     }
   }, []);
 
+  // Sync localConfig with prop config when it changes
+  useEffect(() => {
+    setLocalConfig(config);
+  }, [config]);
+
   const handleSave = () => {
-    onSave(localConfig);
+    // Ensure we're saving the clean spreadsheet ID
+    const cleanConfig = {
+      ...localConfig,
+      spreadsheetId: extractSpreadsheetId(localConfig.spreadsheetId) || localConfig.spreadsheetId
+    };
+    
+    onSave(cleanConfig);
     
     // Save to multiple configs
-    const existingIndex = savedConfigs.findIndex(c => c.sheetName === localConfig.sheetName);
+    const existingIndex = savedConfigs.findIndex(c => c.sheetName === cleanConfig.sheetName);
     let updatedConfigs;
     
     if (existingIndex >= 0) {
       updatedConfigs = [...savedConfigs];
-      updatedConfigs[existingIndex] = localConfig;
+      updatedConfigs[existingIndex] = cleanConfig;
     } else {
-      updatedConfigs = [...savedConfigs, localConfig];
+      updatedConfigs = [...savedConfigs, cleanConfig];
     }
     
     setSavedConfigs(updatedConfigs);
@@ -50,13 +61,20 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     if (field === 'spreadsheetId') {
       const extractedId = extractSpreadsheetId(value);
       if (extractedId && extractedId !== value) {
-        // It was a URL, use the extracted ID
-        value = extractedId;
+        // It was a URL, use the extracted ID and auto-save
+        const newConfig = { ...localConfig, [field]: extractedId };
+        setLocalConfig(newConfig);
+        
+        // Auto-save the clean config
+        onSave(newConfig);
+        
         setTestResult({ success: true, message: `✅ Spreadsheet ID berhasil diekstrak dari URL: ${extractedId}` });
+        return;
       }
     }
     
-    setLocalConfig(prev => ({ ...prev, [field]: value }));
+    const newConfig = { ...localConfig, [field]: value };
+    setLocalConfig(newConfig);
     
     if (field !== 'spreadsheetId') {
       setTestResult(null);
@@ -66,18 +84,21 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     if (field === 'sheetName' || field === 'columns') {
       const newSheetName = field === 'sheetName' ? value : localConfig.sheetName;
       const newColumns = field === 'columns' ? value : localConfig.columns;
-      setLocalConfig(prev => ({ 
-        ...prev, 
-        [field]: value,
-        range: `${newSheetName}!${newColumns}`
-      }));
+      newConfig.range = `${newSheetName}!${newColumns}`;
     }
+    
+    setLocalConfig(newConfig);
   };
 
   const handleUrlExtract = () => {
     const extractedId = extractSpreadsheetId(urlInput);
     if (extractedId) {
-      setLocalConfig(prev => ({ ...prev, spreadsheetId: extractedId }));
+      const newConfig = { ...localConfig, spreadsheetId: extractedId };
+      setLocalConfig(newConfig);
+      
+      // Auto-save the clean config
+      onSave(newConfig);
+      
       setUrlInput('');
       setTestResult({ success: true, message: `✅ Spreadsheet ID berhasil diekstrak: ${extractedId}` });
     } else {
@@ -86,12 +107,16 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   };
 
   const handleTestConnection = async () => {
-    if (!localConfig.spreadsheetId || !localConfig.apiKey) {
+    // Ensure we test with clean ID
+    const cleanId = extractSpreadsheetId(localConfig.spreadsheetId) || localConfig.spreadsheetId;
+    const testConfig = { ...localConfig, spreadsheetId: cleanId };
+    
+    if (!cleanId || !testConfig.apiKey) {
       setTestResult({ success: false, message: 'Harap isi Spreadsheet ID dan API Key terlebih dahulu' });
       return;
     }
 
-    if (!validateApiKey(localConfig.apiKey)) {
+    if (!validateApiKey(testConfig.apiKey)) {
       setTestResult({ success: false, message: 'Format API Key tidak valid. API Key harus dimulai dengan "AIza"' });
       return;
     }
@@ -101,12 +126,17 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     
     try {
       console.log('Starting connection test...');
-      const result = await testSheetsConnection(localConfig);
+      const result = await testSheetsConnection(testConfig);
       console.log('Test result:', result);
       setTestResult(result);
       
       if (result.success) {
-        loadAvailableSheets();
+        // Auto-save the clean config after successful test
+        const cleanConfig = { ...localConfig, spreadsheetId: cleanId };
+        setLocalConfig(cleanConfig);
+        onSave(cleanConfig);
+        
+        loadAvailableSheets(testConfig);
       }
     } catch (error) {
       console.error('Test connection error:', error);
@@ -116,10 +146,10 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     }
   };
 
-  const loadAvailableSheets = async () => {
+  const loadAvailableSheets = async (configToUse?: SheetsConfigType) => {
     setIsLoadingSheets(true);
     try {
-      const sheets = await getSheetsList(localConfig);
+      const sheets = await getSheetsList(configToUse || localConfig);
       setAvailableSheets(sheets);
     } catch (error) {
       console.error('Failed to load sheets:', error);
@@ -129,11 +159,13 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   };
 
   const selectSheet = (sheet: SheetInfo) => {
-    setLocalConfig(prev => ({
-      ...prev,
+    const newConfig = {
+      ...localConfig,
       sheetName: sheet.name,
-      range: `${sheet.name}!${prev.columns}`
-    }));
+      range: `${sheet.name}!${localConfig.columns}`
+    };
+    setLocalConfig(newConfig);
+    onSave(newConfig);
   };
 
   const loadConfig = (configToLoad: SheetsConfigType) => {
