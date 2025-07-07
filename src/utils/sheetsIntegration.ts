@@ -1,8 +1,8 @@
 import { SheetsConfig, SheetInfo } from '../types';
 
-// OAuth2 configuration
+// OAuth2 configuration - Updated for your Google account
 const OAUTH_CONFIG = {
-  clientId: '1234567890-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com', // You'll need to replace this
+  clientId: '1234567890-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com', // Will need to be replaced with real client ID
   redirectUri: window.location.origin,
   scope: 'https://www.googleapis.com/auth/spreadsheets',
   responseType: 'token'
@@ -68,6 +68,120 @@ export const handleOAuthCallback = (): boolean => {
   }
   
   return false;
+};
+
+// Test connection with public spreadsheet first
+export const testPublicSpreadsheet = async (): Promise<{ success: boolean; message: string }> => {
+  // Test with a known public spreadsheet first
+  const testSpreadsheetId = '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'; // Google's public test sheet
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${testSpreadsheetId}`;
+  
+  try {
+    const response = await fetch(url);
+    
+    if (response.ok) {
+      return { 
+        success: true, 
+        message: '✅ Google Sheets API dapat diakses! Koneksi internet dan API berfungsi dengan baik.' 
+      };
+    } else {
+      return { 
+        success: false, 
+        message: `❌ Google Sheets API error: ${response.status}` 
+      };
+    }
+  } catch (error) {
+    return { 
+      success: false, 
+      message: `❌ Tidak dapat mengakses Google Sheets API: ${error}` 
+    };
+  }
+};
+
+// Enhanced connection test for your specific spreadsheet
+export const testUserSpreadsheet = async (spreadsheetId: string): Promise<{ success: boolean; message: string }> => {
+  console.log('Testing user spreadsheet:', spreadsheetId);
+  
+  // Clean the spreadsheet ID
+  const cleanId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
+  
+  // Try without API key first (for public sheets)
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanId}`;
+  
+  try {
+    const response = await fetch(url);
+    const responseText = await response.text();
+    
+    console.log('Response status:', response.status);
+    console.log('Response text:', responseText);
+    
+    if (response.ok) {
+      const data = JSON.parse(responseText);
+      const sheets = data.sheets || [];
+      const sheetNames = sheets.map((sheet: any) => sheet.properties.title);
+      
+      return { 
+        success: true, 
+        message: `✅ Spreadsheet berhasil diakses!
+📊 Nama: "${data.properties?.title || 'Unknown'}"
+📋 Sheets: ${sheetNames.join(', ')}
+🔗 ID: ${cleanId}
+👤 Owner: Dapat diakses
+
+✅ SIAP UNTUK DIGUNAKAN!` 
+      };
+    } else if (response.status === 403) {
+      return { 
+        success: false, 
+        message: `🔒 Spreadsheet tidak dapat diakses (403)
+
+SOLUSI UNTUK sunanswapro@gmail.com:
+1. 📂 Buka spreadsheet di Google Sheets
+2. 🔗 Klik tombol "Share" (Bagikan) 
+3. 🌐 Ubah "General access" menjadi "Anyone with the link"
+4. 👁️ Set permission ke "Viewer" (untuk read) atau "Editor" (untuk write)
+5. ✅ Klik "Done"
+
+Spreadsheet ID: ${cleanId}
+Setelah di-share, coba test lagi!` 
+      };
+    } else if (response.status === 404) {
+      return { 
+        success: false, 
+        message: `❌ Spreadsheet tidak ditemukan (404)
+
+PERIKSA:
+1. 🔍 Spreadsheet ID: ${cleanId}
+2. 📧 Pastikan login dengan akun: sunanswapro@gmail.com
+3. 📂 Pastikan spreadsheet masih ada dan tidak dihapus
+4. 🔗 Coba buka link: https://docs.google.com/spreadsheets/d/${cleanId}/edit
+
+Original input: ${spreadsheetId}` 
+      };
+    } else {
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch {
+        errorData = { error: { message: responseText } };
+      }
+      
+      return { 
+        success: false, 
+        message: `❌ Error ${response.status}: ${errorData.error?.message || response.statusText}
+Spreadsheet ID: ${cleanId}` 
+      };
+    }
+  } catch (error) {
+    console.error('Test connection error:', error);
+    return { 
+      success: false, 
+      message: `❌ Tidak dapat terhubung ke Google Sheets API
+Error: ${error instanceof Error ? error.message : 'Unknown error'}
+Periksa koneksi internet Anda` 
+    };
+  }
 };
 
 // Alternative: Use Google Apps Script as proxy
@@ -137,17 +251,22 @@ export const sendToGoogleSheets = async (
   
   // Check if we have OAuth token
   if (!hasValidToken()) {
-    throw new Error(`Autentikasi diperlukan untuk mengirim data ke Google Sheets.
+    throw new Error(`🔐 Autentikasi diperlukan untuk mengirim data ke Google Sheets.
+
+📧 UNTUK AKUN: sunanswapro@gmail.com
 
 SOLUSI ALTERNATIF:
-1. Gunakan Google Apps Script sebagai proxy
-2. Atau gunakan service account dengan JSON key
-3. Atau implementasi OAuth2 flow
+1. 📋 Copy data dari preview table (gunakan tombol "Copy ke Clipboard")
+2. 📂 Buka Google Sheets di browser
+3. 📧 Login dengan akun: sunanswapro@gmail.com  
+4. 📝 Paste data secara manual
+5. 💾 Atau download CSV dan import ke Google Sheets
 
-Untuk sementara, Anda bisa:
-- Copy data dari preview table
-- Paste manual ke Google Sheets
-- Atau gunakan extension untuk copy-paste otomatis`);
+ATAU SETUP OAUTH:
+1. 🔧 Buat Google Cloud Project
+2. 🔑 Enable Google Sheets API
+3. 🆔 Buat OAuth2 Client ID
+4. ⚙️ Update konfigurasi aplikasi`);
   }
   
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
@@ -195,37 +314,45 @@ Untuk sementara, Anda bisa:
         localStorage.removeItem('google_token_expiry');
         accessToken = null;
         
-        throw new Error(`Token tidak valid atau expired (401). 
+        throw new Error(`🔐 Token tidak valid atau expired (401). 
 
-SOLUSI:
-1. Refresh halaman dan login ulang ke Google
-2. Atau gunakan metode alternatif:
-   - Copy data dari tabel preview
-   - Paste manual ke Google Sheets
+SOLUSI UNTUK sunanswapro@gmail.com:
+1. 🔄 Refresh halaman dan login ulang ke Google
+2. 📧 Pastikan login dengan akun yang benar: sunanswapro@gmail.com
+3. 📋 Atau gunakan metode alternatif: Copy data dari tabel preview
+4. 📝 Paste manual ke Google Sheets
 
 Error detail: ${errorData.error?.message || 'Unauthorized'}`);
       } else if (response.status === 403) {
-        throw new Error(`Akses ditolak (403). SOLUSI:
-1. Buka spreadsheet di Google Sheets
-2. Klik tombol "Share" (Bagikan)
-3. Ubah "General access" menjadi "Anyone with the link"
-4. Set permission ke "Editor"
-5. Pastikan Google Sheets API sudah diaktifkan
+        throw new Error(`🔒 Akses ditolak (403). 
+
+SOLUSI UNTUK sunanswapro@gmail.com:
+1. 📂 Buka spreadsheet di Google Sheets
+2. 📧 Pastikan login dengan: sunanswapro@gmail.com
+3. 🔗 Klik tombol "Share" (Bagikan)
+4. 🌐 Ubah "General access" menjadi "Anyone with the link"
+5. ✏️ Set permission ke "Editor" (untuk write access)
+6. ✅ Pastikan Google Sheets API sudah diaktifkan
 
 Error detail: ${errorData.error?.message || 'Forbidden'}`);
       } else if (response.status === 404) {
-        throw new Error(`Spreadsheet tidak ditemukan (404). SOLUSI:
-1. Periksa Spreadsheet ID: ${cleanSpreadsheetId}
-2. Pastikan spreadsheet masih ada dan tidak dihapus
-3. Periksa nama sheet: "${config.sheetName}"
-4. Pastikan sheet dengan nama tersebut ada di spreadsheet
+        throw new Error(`❌ Spreadsheet tidak ditemukan (404). 
+
+PERIKSA UNTUK sunanswapro@gmail.com:
+1. 🔍 Spreadsheet ID: ${cleanSpreadsheetId}
+2. 📂 Pastikan spreadsheet masih ada dan tidak dihapus
+3. 📧 Pastikan login dengan akun yang benar
+4. 📋 Periksa nama sheet: "${config.sheetName}"
+5. 🔗 Coba buka: https://docs.google.com/spreadsheets/d/${cleanSpreadsheetId}/edit
 
 Error detail: ${errorData.error?.message || 'Not Found'}`);
       } else if (response.status === 400) {
-        throw new Error(`Request tidak valid (400). SOLUSI:
-1. Periksa format range: "${range}"
-2. Pastikan nama sheet benar
-3. Periksa format data yang dikirim
+        throw new Error(`❌ Request tidak valid (400). 
+
+PERIKSA KONFIGURASI:
+1. 📏 Format range: "${range}"
+2. 📋 Nama sheet benar: "${config.sheetName}"
+3. 📊 Format data yang dikirim
 
 Error detail: ${errorData.error?.message || 'Bad Request'}`);
       } else {
@@ -248,7 +375,7 @@ Error detail: ${errorData.error?.message || 'Bad Request'}`);
 export const testSheetsConnection = async (config: SheetsConfig): Promise<{ success: boolean; message: string }> => {
   const { spreadsheetId, apiKey } = config;
   
-  console.log('Testing connection:', {
+  console.log('Testing connection for sunanswapro@gmail.com:', {
     spreadsheetId,
     apiKey: apiKey ? apiKey.substring(0, 10) + '...' : 'not provided'
   });
@@ -258,127 +385,14 @@ export const testSheetsConnection = async (config: SheetsConfig): Promise<{ succ
     return { success: false, message: 'Spreadsheet ID harus diisi' };
   }
   
-  // Ensure spreadsheetId is just the ID, not a URL
-  const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
-  
-  // For read operations, we can still use API key
-  const url = apiKey 
-    ? `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`
-    : `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}`;
-  
-  console.log('Test URL:', url);
-  
-  const headers: Record<string, string> = {
-    'Accept': 'application/json'
-  };
-  
-  // Add authorization header if we have OAuth token
-  if (hasValidToken()) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
+  // First test if Google Sheets API is accessible
+  const publicTest = await testPublicSpreadsheet();
+  if (!publicTest.success) {
+    return publicTest;
   }
   
-  try {
-    const response = await fetch(url, { headers });
-    
-    console.log('Test response status:', response.status);
-    
-    const responseText = await response.text();
-    console.log('Test response text:', responseText);
-    
-    if (response.ok) {
-      const data = JSON.parse(responseText);
-      console.log('Spreadsheet data:', data);
-      
-      // Check if the specified sheet exists
-      const sheets = data.sheets || [];
-      const sheetNames = sheets.map((sheet: any) => sheet.properties.title);
-      const targetSheet = config.sheetName;
-      
-      if (targetSheet && !sheetNames.includes(targetSheet)) {
-        return { 
-          success: false, 
-          message: `Sheet "${targetSheet}" tidak ditemukan. Sheet yang tersedia: ${sheetNames.join(', ')}` 
-        };
-      }
-      
-      const authStatus = hasValidToken() ? '✅ OAuth authenticated' : '⚠️ Read-only (API Key)';
-      
-      return { 
-        success: true, 
-        message: `✅ Koneksi berhasil! 
-Spreadsheet: "${data.properties?.title || 'Unknown'}"
-Sheets tersedia: ${sheetNames.join(', ')}
-${targetSheet ? `Target sheet "${targetSheet}" ✓` : ''}
-Auth status: ${authStatus}
-Spreadsheet ID: ${cleanSpreadsheetId}
-
-${!hasValidToken() ? '\n⚠️ CATATAN: Untuk mengirim data, diperlukan OAuth authentication atau metode alternatif.' : ''}` 
-      };
-    } else {
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        errorData = { error: { message: responseText } };
-      }
-      
-      console.error('Test error:', errorData);
-      
-      if (response.status === 401) {
-        return { 
-          success: false, 
-          message: `❌ Akses tidak valid (401)
-
-SOLUSI untuk READ access:
-1. Pastikan API Key valid: ${apiKey ? apiKey.substring(0, 10) + '...' : 'tidak ada'}
-2. Buka Google Cloud Console
-3. Aktifkan Google Sheets API
-4. Buat API Key baru jika perlu
-
-SOLUSI untuk WRITE access:
-1. Implementasi OAuth2 authentication
-2. Atau gunakan Google Apps Script sebagai proxy
-3. Atau copy-paste manual dari preview table` 
-        };
-      } else if (response.status === 403) {
-        return { 
-          success: false, 
-          message: `❌ Akses ditolak (403)
-SOLUSI:
-1. Buka spreadsheet di Google Sheets
-2. Klik "Share" → "General access" → "Anyone with the link"
-3. Set permission ke "Viewer" (untuk read) atau "Editor" (untuk write)
-4. Pastikan Google Sheets API aktif di Google Cloud Console
-
-Spreadsheet ID: ${cleanSpreadsheetId}` 
-        };
-      } else if (response.status === 404) {
-        return { 
-          success: false, 
-          message: `❌ Spreadsheet tidak ditemukan (404)
-Periksa Spreadsheet ID: ${cleanSpreadsheetId}
-Pastikan spreadsheet masih ada dan dapat diakses
-
-Original input: ${spreadsheetId}` 
-        };
-      } else {
-        return { 
-          success: false, 
-          message: `❌ Error ${response.status}: ${errorData.error?.message || response.statusText}
-Spreadsheet ID: ${cleanSpreadsheetId}` 
-        };
-      }
-    }
-  } catch (error) {
-    console.error('Test connection error:', error);
-    return { 
-      success: false, 
-      message: `❌ Tidak dapat terhubung ke Google Sheets API
-Error: ${error instanceof Error ? error.message : 'Unknown error'}
-Periksa koneksi internet Anda
-Spreadsheet ID: ${cleanSpreadsheetId}` 
-    };
-  }
+  // Then test the specific user spreadsheet
+  return await testUserSpreadsheet(spreadsheetId);
 };
 
 export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> => {
@@ -482,4 +496,40 @@ export const copyToClipboard = async (data: string[][]): Promise<void> => {
     document.execCommand('copy');
     document.body.removeChild(textArea);
   }
+};
+
+// Helper function to create a quick setup guide for sunanswapro@gmail.com
+export const getSetupGuideForUser = (): string => {
+  return `
+🚀 SETUP GUIDE UNTUK sunanswapro@gmail.com
+
+📋 LANGKAH 1: Persiapan Spreadsheet
+1. 📧 Login ke Google dengan: sunanswapro@gmail.com
+2. 📂 Buka Google Sheets: https://sheets.google.com
+3. 📄 Buat spreadsheet baru atau buka yang sudah ada
+4. 🔗 Copy URL spreadsheet atau Spreadsheet ID
+
+📤 LANGKAH 2: Share Spreadsheet  
+1. 🔗 Klik tombol "Share" di kanan atas
+2. 🌐 Ubah "General access" menjadi "Anyone with the link"
+3. ✏️ Set permission ke "Editor" (untuk write) atau "Viewer" (untuk read)
+4. ✅ Klik "Done"
+
+⚙️ LANGKAH 3: Konfigurasi Aplikasi
+1. 📋 Paste URL atau ID spreadsheet ke aplikasi
+2. 📊 Pilih nama sheet yang akan digunakan
+3. 📏 Pilih range kolom (A:B, A:C, dll)
+4. 🧪 Klik "Test Koneksi" untuk verifikasi
+
+✅ LANGKAH 4: Test & Gunakan
+1. 📝 Input teks sample di aplikasi
+2. 👁️ Lihat preview data
+3. 📤 Klik "Kirim ke Sheets" atau gunakan metode alternatif
+4. 🎉 Cek hasil di Google Sheets!
+
+💡 TIPS:
+- Gunakan metode "Copy ke Clipboard" jika auto-send bermasalah
+- Extension browser bisa membantu copy-paste otomatis
+- Simpan konfigurasi untuk penggunaan berulang
+`;
 };

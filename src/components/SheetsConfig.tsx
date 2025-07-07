@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link, Key, Shield } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link, Key, Shield, User, Mail } from 'lucide-react';
 import { SheetsConfig as SheetsConfigType, SheetInfo } from '../types';
-import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey, hasValidToken, initiateOAuth } from '../utils/sheetsIntegration';
+import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey, hasValidToken, initiateOAuth, getSetupGuideForUser } from '../utils/sheetsIntegration';
 
 interface SheetsConfigProps {
   config: SheetsConfigType;
@@ -19,6 +19,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
   const [savedConfigs, setSavedConfigs] = useState<SheetsConfigType[]>([]);
   const [showConfigManager, setShowConfigManager] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('text-to-sheets-configs');
@@ -120,7 +121,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     setTestResult(null);
     
     try {
-      console.log('Starting connection test...');
+      console.log('Starting connection test for sunanswapro@gmail.com...');
       const result = await testSheetsConnection(testConfig);
       console.log('Test result:', result);
       setTestResult(result);
@@ -194,10 +195,19 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           </div>
           <div>
             <h3 className="text-xl font-bold text-gray-800">Google Sheets Setup</h3>
-            <p className="text-sm text-gray-600">Konfigurasi koneksi ke spreadsheet</p>
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Mail className="h-3 w-3" />
+              <span>sunanswapro@gmail.com</span>
+            </div>
           </div>
         </div>
         <div className="flex space-x-2">
+          <button
+            onClick={() => setShowSetupGuide(!showSetupGuide)}
+            className="text-sm text-blue-600 hover:text-blue-700 transition-colors font-medium"
+          >
+            {showSetupGuide ? 'Tutup Guide' : 'Setup Guide'}
+          </button>
           <button
             onClick={() => setShowConfigManager(!showConfigManager)}
             className="text-sm text-purple-600 hover:text-purple-700 transition-colors font-medium"
@@ -212,6 +222,60 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           </button>
         </div>
       </div>
+
+      {/* User Account Info */}
+      <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-blue-500 rounded-lg">
+            <User className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-blue-800">Target Account</h4>
+            <p className="text-sm text-blue-700">
+              📧 <strong>sunanswapro@gmail.com</strong> - Pastikan login dengan akun ini di Google Sheets
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Setup Guide */}
+      {showSetupGuide && (
+        <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+          <h4 className="font-semibold text-green-800 mb-3 flex items-center">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Setup Guide untuk sunanswapro@gmail.com
+          </h4>
+          <div className="text-sm text-green-700 space-y-3">
+            <div className="bg-white/80 rounded-lg p-3">
+              <p className="font-semibold mb-2">📋 LANGKAH 1: Persiapan Spreadsheet</p>
+              <ul className="space-y-1 text-xs">
+                <li>• 📧 Login ke Google dengan: <strong>sunanswapro@gmail.com</strong></li>
+                <li>• 📂 Buka Google Sheets: <a href="https://sheets.google.com" target="_blank" className="text-blue-600 underline">sheets.google.com</a></li>
+                <li>• 📄 Buat spreadsheet baru atau buka yang sudah ada</li>
+                <li>• 🔗 Copy URL spreadsheet</li>
+              </ul>
+            </div>
+            <div className="bg-white/80 rounded-lg p-3">
+              <p className="font-semibold mb-2">📤 LANGKAH 2: Share Spreadsheet</p>
+              <ul className="space-y-1 text-xs">
+                <li>• 🔗 Klik tombol "Share" di kanan atas</li>
+                <li>• 🌐 Ubah "General access" menjadi "Anyone with the link"</li>
+                <li>• ✏️ Set permission ke "Editor" (untuk write) atau "Viewer" (untuk read)</li>
+                <li>• ✅ Klik "Done"</li>
+              </ul>
+            </div>
+            <div className="bg-white/80 rounded-lg p-3">
+              <p className="font-semibold mb-2">⚙️ LANGKAH 3: Konfigurasi Aplikasi</p>
+              <ul className="space-y-1 text-xs">
+                <li>• 📋 Paste URL spreadsheet di form di bawah</li>
+                <li>• 📊 Pilih nama sheet yang akan digunakan</li>
+                <li>• 📏 Pilih range kolom (A:B, A:C, dll)</li>
+                <li>• 🧪 Klik "Test Koneksi" untuk verifikasi</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Authentication Status */}
       <div className={`mb-6 rounded-xl p-4 border ${
@@ -241,7 +305,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
               }`}>
                 {isAuthenticated 
                   ? 'Anda dapat mengirim data langsung ke Google Sheets'
-                  : 'Diperlukan untuk auto-send ke Google Sheets'
+                  : 'Diperlukan untuk auto-send ke Google Sheets (sunanswapro@gmail.com)'
                 }
               </p>
             </div>
@@ -261,13 +325,13 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
           <AlertCircle className="h-4 w-4 mr-2" />
-          Setup Cepat (2 Langkah)
+          Setup Cepat untuk sunanswapro@gmail.com
         </h4>
         <div className="text-sm text-blue-700 space-y-2">
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
             <div>
-              <p><strong>Buat/Buka Google Sheets:</strong></p>
+              <p><strong>Buka/Buat Google Sheets dengan akun sunanswapro@gmail.com</strong></p>
               <button 
                 onClick={copyExampleUrl}
                 className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
@@ -280,13 +344,19 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
             <div>
-              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Viewer" (minimal)</p>
+              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Editor"</p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
+            <div>
+              <p><strong>Paste URL di form bawah dan test koneksi</strong></p>
             </div>
           </div>
         </div>
         <div className="mt-3 p-3 bg-blue-100 rounded-lg">
           <p className="text-xs text-blue-800">
-            <strong>💡 Catatan:</strong> API Key opsional untuk read-only access. Untuk auto-send, gunakan OAuth login di atas.
+            <strong>💡 Catatan:</strong> Pastikan login dengan akun <strong>sunanswapro@gmail.com</strong> di Google Sheets
           </p>
         </div>
       </div>
@@ -335,7 +405,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
             <h4 className="font-semibold text-yellow-800 mb-3 flex items-center">
               <Link className="h-4 w-4 mr-2" />
-              Paste URL Spreadsheet
+              Paste URL Spreadsheet (sunanswapro@gmail.com)
             </h4>
             <div className="flex space-x-2">
               <input
@@ -534,6 +604,9 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
               </span>
               <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
                 {savedConfigs.length} configs
+              </span>
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                sunanswapro@gmail.com
               </span>
             </div>
           </div>
