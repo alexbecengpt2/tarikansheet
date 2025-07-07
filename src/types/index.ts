@@ -1,6 +1,6 @@
 export interface SheetsConfig {
   spreadsheetId: string;
-  apiKey: string;
+  apiKey?: string;
   range: string;
   sheetName: string;
   columns: string;

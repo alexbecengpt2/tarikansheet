@@ -34,3 +34,17 @@ Kopi Arabica | 45000
 Teh Hijau | 25000
 Coklat Panas | 20000
 ```
+
+## Data Test 6: Format Number-first
+```
+15000 Produk A
+25000 Produk B
+35000 Produk C
+```
+
+## Data Test 7: Format Complex Mixed
+```
+Item #1: Laptop Gaming - Rp 15.500.000
+Item #2: Mouse Wireless - Rp 250.000
+Item #3: Headset Gaming - Rp 750.000
+```

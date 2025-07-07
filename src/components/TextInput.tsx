@@ -29,7 +29,7 @@ const TextInput: React.FC<TextInputProps> = ({ value, onChange, placeholder }) =
           </div>
           <div>
             <h3 className="text-xl font-bold text-gray-800">Smart Input</h3>
-            <p className="text-sm text-gray-600">Auto-parsing dengan AI detection</p>
+            <p className="text-sm text-gray-600">Universal parsing - bekerja di mana saja</p>
           </div>
         </div>
         <button
@@ -66,7 +66,7 @@ const TextInput: React.FC<TextInputProps> = ({ value, onChange, placeholder }) =
             <span>{value.length} karakter</span>
           </span>
           <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">
-            Mendukung: Tab, Koma, Spasi, Pipe
+            Universal: Tab, Koma, Spasi, Pipe, Mixed
           </span>
         </div>
         
