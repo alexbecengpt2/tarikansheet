@@ -42,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowExtension }) => {
             >
               <History className="h-4 w-4" />
               <span className="hidden sm:inline font-medium">History</span>
-            <p className="text-sm text-gray-600 font-medium">Universal data integration - bekerja di mana saja</p>
+            </button>
           </div>
         </div>
       </div>
@@ -51,5 +51,3 @@ const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowExtension }) => {
 };
 
 export default Header;
-  )
-}
