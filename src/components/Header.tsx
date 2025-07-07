@@ -51,3 +51,5 @@ const Header: React.FC<HeaderProps> = ({ onShowHistory, onShowExtension }) => {
 };
 
 export default Header;
+  )
+}
