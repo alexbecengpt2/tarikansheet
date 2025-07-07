@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff, CheckCircle, TestTube, Loader2, Plus, Trash2, Edit3, AlertCircle, ExternalLink, Copy, Link, Key, Shield } from 'lucide-react';
 import { SheetsConfig as SheetsConfigType, SheetInfo } from '../types';
-import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey } from '../utils/sheetsIntegration';
+import { testSheetsConnection, getSheetsList, extractSpreadsheetId, validateApiKey, hasValidToken, initiateOAuth } from '../utils/sheetsIntegration';
 
 interface SheetsConfigProps {
   config: SheetsConfigType;
@@ -111,13 +111,8 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     const cleanId = extractSpreadsheetId(localConfig.spreadsheetId) || localConfig.spreadsheetId;
     const testConfig = { ...localConfig, spreadsheetId: cleanId };
     
-    if (!cleanId || !testConfig.apiKey) {
-      setTestResult({ success: false, message: 'Harap isi Spreadsheet ID dan API Key terlebih dahulu' });
-      return;
-    }
-
-    if (!validateApiKey(testConfig.apiKey)) {
-      setTestResult({ success: false, message: 'Format API Key tidak valid. API Key harus dimulai dengan "AIza"' });
+    if (!cleanId) {
+      setTestResult({ success: false, message: 'Harap isi Spreadsheet ID terlebih dahulu' });
       return;
     }
 
@@ -183,7 +178,12 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
     navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/1zcsm2DPVccpnOGz_9HkVotn9M9f6KRiA_-C2CNld6_c/edit');
   };
 
-  const isConfigured = config.spreadsheetId && config.apiKey;
+  const handleOAuthLogin = () => {
+    initiateOAuth();
+  };
+
+  const isConfigured = config.spreadsheetId;
+  const isAuthenticated = hasValidToken();
 
   return (
     <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/30 p-6 shadow-2xl">
@@ -213,11 +213,55 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
         </div>
       </div>
 
+      {/* Authentication Status */}
+      <div className={`mb-6 rounded-xl p-4 border ${
+        isAuthenticated 
+          ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+          : 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-lg ${
+              isAuthenticated ? 'bg-green-500' : 'bg-yellow-500'
+            }`}>
+              {isAuthenticated ? (
+                <Shield className="h-4 w-4 text-white" />
+              ) : (
+                <Key className="h-4 w-4 text-white" />
+              )}
+            </div>
+            <div>
+              <h4 className={`font-semibold ${
+                isAuthenticated ? 'text-green-800' : 'text-yellow-800'
+              }`}>
+                {isAuthenticated ? 'OAuth Authenticated' : 'Authentication Required'}
+              </h4>
+              <p className={`text-sm ${
+                isAuthenticated ? 'text-green-700' : 'text-yellow-700'
+              }`}>
+                {isAuthenticated 
+                  ? 'Anda dapat mengirim data langsung ke Google Sheets'
+                  : 'Diperlukan untuk auto-send ke Google Sheets'
+                }
+              </p>
+            </div>
+          </div>
+          {!isAuthenticated && (
+            <button
+              onClick={handleOAuthLogin}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              Login Google
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Quick Setup Guide */}
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
           <AlertCircle className="h-4 w-4 mr-2" />
-          Setup Cepat (3 Langkah)
+          Setup Cepat (2 Langkah)
         </h4>
         <div className="text-sm text-blue-700 space-y-2">
           <div className="flex items-start space-x-2">
@@ -236,24 +280,14 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
             <div>
-              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Editor"</p>
+              <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Viewer" (minimal)</p>
             </div>
           </div>
-          <div className="flex items-start space-x-2">
-            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
-            <div>
-              <p><strong>Dapatkan API Key:</strong></p>
-              <a 
-                href="https://console.cloud.google.com/apis/credentials"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
-              >
-                <ExternalLink className="h-3 w-3" />
-                <span>Google Cloud Console</span>
-              </a>
-            </div>
-          </div>
+        </div>
+        <div className="mt-3 p-3 bg-blue-100 rounded-lg">
+          <p className="text-xs text-blue-800">
+            <strong>💡 Catatan:</strong> API Key opsional untuk read-only access. Untuk auto-send, gunakan OAuth login di atas.
+          </p>
         </div>
       </div>
 
@@ -301,7 +335,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
           <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
             <h4 className="font-semibold text-yellow-800 mb-3 flex items-center">
               <Link className="h-4 w-4 mr-2" />
-              Paste URL Spreadsheet (Opsional)
+              Paste URL Spreadsheet
             </h4>
             <div className="flex space-x-2">
               <input
@@ -343,14 +377,14 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key *
+                API Key (Opsional)
               </label>
               <div className="relative">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={localConfig.apiKey}
                   onChange={(e) => handleChange('apiKey', e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder="AIzaSy... (opsional untuk read-only)"
                   className="w-full px-3 py-2 pr-10 bg-white/80 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
@@ -362,7 +396,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                API Key dari Google Cloud Console (harus dimulai dengan "AIza")
+                Hanya untuk read access. Gunakan OAuth untuk write access.
               </p>
             </div>
           </div>
@@ -490,9 +524,18 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </>
               )}
             </div>
-            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-              {savedConfigs.length} configs
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className={`text-xs px-2 py-1 rounded-full ${
+                isAuthenticated 
+                  ? 'bg-green-100 text-green-700' 
+                  : 'bg-yellow-100 text-yellow-700'
+              }`}>
+                {isAuthenticated ? 'OAuth ✓' : 'No Auth'}
+              </span>
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                {savedConfigs.length} configs
+              </span>
+            </div>
           </div>
           {isConfigured && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">

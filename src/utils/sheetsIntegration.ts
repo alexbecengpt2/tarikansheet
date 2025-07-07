@@ -1,21 +1,132 @@
 import { SheetsConfig, SheetInfo } from '../types';
 
+// OAuth2 configuration
+const OAUTH_CONFIG = {
+  clientId: '1234567890-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com', // You'll need to replace this
+  redirectUri: window.location.origin,
+  scope: 'https://www.googleapis.com/auth/spreadsheets',
+  responseType: 'token'
+};
+
+// Store access token
+let accessToken: string | null = null;
+
+// Check if we have a valid access token
+export const hasValidToken = (): boolean => {
+  const token = localStorage.getItem('google_access_token');
+  const expiry = localStorage.getItem('google_token_expiry');
+  
+  if (!token || !expiry) return false;
+  
+  const now = Date.now();
+  const expiryTime = parseInt(expiry);
+  
+  if (now >= expiryTime) {
+    // Token expired, clear it
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_token_expiry');
+    return false;
+  }
+  
+  accessToken = token;
+  return true;
+};
+
+// Initiate OAuth2 flow
+export const initiateOAuth = (): void => {
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${OAUTH_CONFIG.clientId}&` +
+    `redirect_uri=${encodeURIComponent(OAUTH_CONFIG.redirectUri)}&` +
+    `scope=${encodeURIComponent(OAUTH_CONFIG.scope)}&` +
+    `response_type=${OAUTH_CONFIG.responseType}&` +
+    `access_type=online`;
+  
+  window.location.href = authUrl;
+};
+
+// Handle OAuth2 callback
+export const handleOAuthCallback = (): boolean => {
+  const hash = window.location.hash;
+  if (!hash.includes('access_token=')) return false;
+  
+  const params = new URLSearchParams(hash.substring(1));
+  const token = params.get('access_token');
+  const expiresIn = params.get('expires_in');
+  
+  if (token && expiresIn) {
+    const expiryTime = Date.now() + (parseInt(expiresIn) * 1000);
+    
+    localStorage.setItem('google_access_token', token);
+    localStorage.setItem('google_token_expiry', expiryTime.toString());
+    
+    accessToken = token;
+    
+    // Clear the hash from URL
+    window.history.replaceState(null, '', window.location.pathname);
+    
+    return true;
+  }
+  
+  return false;
+};
+
+// Alternative: Use Google Apps Script as proxy
+export const sendToGoogleSheetsViaProxy = async (
+  data: string[][],
+  config: SheetsConfig
+): Promise<void> => {
+  // This is a workaround using Google Apps Script as a proxy
+  // You'll need to create a Google Apps Script with doPost function
+  
+  const proxyUrl = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+  
+  const requestBody = {
+    spreadsheetId: config.spreadsheetId,
+    range: config.range,
+    values: data,
+    apiKey: config.apiKey
+  };
+  
+  try {
+    const response = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Proxy error: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Proxy error:', error);
+    throw error;
+  }
+};
+
 export const sendToGoogleSheets = async (
   data: string[][],
   config: SheetsConfig
 ): Promise<void> => {
-  const { spreadsheetId, apiKey, range } = config;
+  const { spreadsheetId, range } = config;
   
   console.log('Sending to Google Sheets:', {
     spreadsheetId,
-    apiKey: apiKey.substring(0, 10) + '...',
     range,
     dataRows: data.length
   });
   
   // Validate inputs
-  if (!spreadsheetId || !apiKey || !range) {
-    throw new Error('Missing required configuration: spreadsheetId, apiKey, or range');
+  if (!spreadsheetId || !range) {
+    throw new Error('Missing required configuration: spreadsheetId or range');
   }
   
   // Ensure spreadsheetId is just the ID, not a URL
@@ -24,7 +135,22 @@ export const sendToGoogleSheets = async (
   // Clean the range to ensure proper formatting
   const cleanRange = encodeURIComponent(range);
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS&key=${apiKey}`;
+  // Check if we have OAuth token
+  if (!hasValidToken()) {
+    throw new Error(`Autentikasi diperlukan untuk mengirim data ke Google Sheets.
+
+SOLUSI ALTERNATIF:
+1. Gunakan Google Apps Script sebagai proxy
+2. Atau gunakan service account dengan JSON key
+3. Atau implementasi OAuth2 flow
+
+Untuk sementara, Anda bisa:
+- Copy data dari preview table
+- Paste manual ke Google Sheets
+- Atau gunakan extension untuk copy-paste otomatis`);
+  }
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}/values/${cleanRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
   
   console.log('Request URL:', url);
   
@@ -40,6 +166,7 @@ export const sendToGoogleSheets = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json'
       },
       body: JSON.stringify(requestBody)
@@ -63,24 +190,31 @@ export const sendToGoogleSheets = async (
       
       // Handle specific error cases with more detailed messages
       if (response.status === 401) {
-        throw new Error(`API Key tidak valid (401). Solusi:
-1. Pastikan API Key dimulai dengan "AIza"
-2. Buka Google Cloud Console dan aktifkan Google Sheets API
-3. Buat API Key baru jika perlu
-4. Pastikan tidak ada spasi di awal/akhir API Key
+        // Clear invalid token
+        localStorage.removeItem('google_access_token');
+        localStorage.removeItem('google_token_expiry');
+        accessToken = null;
+        
+        throw new Error(`Token tidak valid atau expired (401). 
+
+SOLUSI:
+1. Refresh halaman dan login ulang ke Google
+2. Atau gunakan metode alternatif:
+   - Copy data dari tabel preview
+   - Paste manual ke Google Sheets
 
 Error detail: ${errorData.error?.message || 'Unauthorized'}`);
       } else if (response.status === 403) {
-        throw new Error(`Akses ditolak (403). Solusi:
+        throw new Error(`Akses ditolak (403). SOLUSI:
 1. Buka spreadsheet di Google Sheets
 2. Klik tombol "Share" (Bagikan)
 3. Ubah "General access" menjadi "Anyone with the link"
 4. Set permission ke "Editor"
-5. Pastikan Google Sheets API sudah diaktifkan di Google Cloud Console
+5. Pastikan Google Sheets API sudah diaktifkan
 
 Error detail: ${errorData.error?.message || 'Forbidden'}`);
       } else if (response.status === 404) {
-        throw new Error(`Spreadsheet tidak ditemukan (404). Solusi:
+        throw new Error(`Spreadsheet tidak ditemukan (404). SOLUSI:
 1. Periksa Spreadsheet ID: ${cleanSpreadsheetId}
 2. Pastikan spreadsheet masih ada dan tidak dihapus
 3. Periksa nama sheet: "${config.sheetName}"
@@ -88,7 +222,7 @@ Error detail: ${errorData.error?.message || 'Forbidden'}`);
 
 Error detail: ${errorData.error?.message || 'Not Found'}`);
       } else if (response.status === 400) {
-        throw new Error(`Request tidak valid (400). Solusi:
+        throw new Error(`Request tidak valid (400). SOLUSI:
 1. Periksa format range: "${range}"
 2. Pastikan nama sheet benar
 3. Periksa format data yang dikirim
@@ -116,30 +250,35 @@ export const testSheetsConnection = async (config: SheetsConfig): Promise<{ succ
   
   console.log('Testing connection:', {
     spreadsheetId,
-    apiKey: apiKey.substring(0, 10) + '...'
+    apiKey: apiKey ? apiKey.substring(0, 10) + '...' : 'not provided'
   });
   
   // Validate inputs
-  if (!spreadsheetId || !apiKey) {
-    return { success: false, message: 'Spreadsheet ID dan API Key harus diisi' };
-  }
-  
-  if (!apiKey.startsWith('AIza')) {
-    return { success: false, message: 'API Key harus dimulai dengan "AIza". Periksa kembali API Key Anda.' };
+  if (!spreadsheetId) {
+    return { success: false, message: 'Spreadsheet ID harus diisi' };
   }
   
   // Ensure spreadsheetId is just the ID, not a URL
   const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
+  // For read operations, we can still use API key
+  const url = apiKey 
+    ? `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`
+    : `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}`;
+  
   console.log('Test URL:', url);
   
+  const headers: Record<string, string> = {
+    'Accept': 'application/json'
+  };
+  
+  // Add authorization header if we have OAuth token
+  if (hasValidToken()) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+  
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
+    const response = await fetch(url, { headers });
     
     console.log('Test response status:', response.status);
     
@@ -162,13 +301,18 @@ export const testSheetsConnection = async (config: SheetsConfig): Promise<{ succ
         };
       }
       
+      const authStatus = hasValidToken() ? '✅ OAuth authenticated' : '⚠️ Read-only (API Key)';
+      
       return { 
         success: true, 
         message: `✅ Koneksi berhasil! 
 Spreadsheet: "${data.properties?.title || 'Unknown'}"
 Sheets tersedia: ${sheetNames.join(', ')}
 ${targetSheet ? `Target sheet "${targetSheet}" ✓` : ''}
-Spreadsheet ID: ${cleanSpreadsheetId}` 
+Auth status: ${authStatus}
+Spreadsheet ID: ${cleanSpreadsheetId}
+
+${!hasValidToken() ? '\n⚠️ CATATAN: Untuk mengirim data, diperlukan OAuth authentication atau metode alternatif.' : ''}` 
       };
     } else {
       let errorData;
@@ -183,23 +327,27 @@ Spreadsheet ID: ${cleanSpreadsheetId}`
       if (response.status === 401) {
         return { 
           success: false, 
-          message: `❌ API Key tidak valid (401)
-Solusi:
-1. Pastikan API Key dimulai dengan "AIza"
+          message: `❌ Akses tidak valid (401)
+
+SOLUSI untuk READ access:
+1. Pastikan API Key valid: ${apiKey ? apiKey.substring(0, 10) + '...' : 'tidak ada'}
 2. Buka Google Cloud Console
 3. Aktifkan Google Sheets API
 4. Buat API Key baru jika perlu
 
-Current API Key: ${apiKey.substring(0, 10)}...` 
+SOLUSI untuk WRITE access:
+1. Implementasi OAuth2 authentication
+2. Atau gunakan Google Apps Script sebagai proxy
+3. Atau copy-paste manual dari preview table` 
         };
       } else if (response.status === 403) {
         return { 
           success: false, 
           message: `❌ Akses ditolak (403)
-Solusi:
+SOLUSI:
 1. Buka spreadsheet di Google Sheets
 2. Klik "Share" → "General access" → "Anyone with the link"
-3. Set permission ke "Editor"
+3. Set permission ke "Viewer" (untuk read) atau "Editor" (untuk write)
 4. Pastikan Google Sheets API aktif di Google Cloud Console
 
 Spreadsheet ID: ${cleanSpreadsheetId}` 
@@ -239,14 +387,20 @@ export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> 
   // Ensure spreadsheetId is just the ID, not a URL
   const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
   
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
+  const url = apiKey 
+    ? `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`
+    : `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}`;
+  
+  const headers: Record<string, string> = {
+    'Accept': 'application/json'
+  };
+  
+  if (hasValidToken()) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
   
   try {
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
+    const response = await fetch(url, { headers });
     
     if (!response.ok) {
       throw new Error(`Failed to fetch sheets: ${response.status}`);
@@ -300,4 +454,32 @@ export const extractSpreadsheetId = (input: string): string | null => {
 // Helper function to validate API key format
 export const validateApiKey = (apiKey: string): boolean => {
   return apiKey.startsWith('AIza') && apiKey.length > 20;
+};
+
+// Export data as CSV for manual copy-paste
+export const exportAsCSV = (data: string[][]): string => {
+  return data.map(row => 
+    row.map(cell => 
+      // Escape cells that contain commas, quotes, or newlines
+      cell.includes(',') || cell.includes('"') || cell.includes('\n') 
+        ? `"${cell.replace(/"/g, '""')}"` 
+        : cell
+    ).join(',')
+  ).join('\n');
+};
+
+// Copy data to clipboard
+export const copyToClipboard = async (data: string[][]): Promise<void> => {
+  const csvData = exportAsCSV(data);
+  try {
+    await navigator.clipboard.writeText(csvData);
+  } catch (error) {
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = csvData;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+  }
 };

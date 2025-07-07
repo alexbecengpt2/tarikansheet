@@ -7,7 +7,7 @@ import HistoryPanel from './components/HistoryPanel';
 import ExtensionPanel from './components/ExtensionPanel';
 import QuickSendButton from './components/QuickSendButton';
 import { parseTextToColumns } from './utils/textParser';
-import { sendToGoogleSheets, extractSpreadsheetId } from './utils/sheetsIntegration';
+import { sendToGoogleSheets, extractSpreadsheetId, handleOAuthCallback } from './utils/sheetsIntegration';
 import { HistoryEntry, SheetsConfig as SheetsConfigType } from './types';
 
 function App() {
@@ -31,6 +31,12 @@ function App() {
   } | null>(null);
 
   useEffect(() => {
+    // Handle OAuth callback
+    const oauthHandled = handleOAuthCallback();
+    if (oauthHandled) {
+      showNotification('OAuth authentication berhasil!', 'success');
+    }
+
     const savedHistory = localStorage.getItem('text-to-sheets-history');
     if (savedHistory) {
       setHistory(JSON.parse(savedHistory));
@@ -109,7 +115,7 @@ function App() {
       return;
     }
 
-    if (!cleanConfig.spreadsheetId || !cleanConfig.apiKey) {
+    if (!cleanConfig.spreadsheetId) {
       showNotification('Silakan konfigurasi Google Sheets terlebih dahulu', 'error');
       return;
     }
@@ -149,7 +155,7 @@ function App() {
       setHistory(updatedHistory);
       localStorage.setItem('text-to-sheets-history', JSON.stringify(updatedHistory));
       
-      showNotification('Gagal mengirim data ke Google Sheets', 'error');
+      showNotification('Gagal mengirim data ke Google Sheets. Coba gunakan metode alternatif.', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -188,7 +194,7 @@ function App() {
       setSelectedText('');
       showNotification(`Quick send berhasil ke sheet "${cleanConfig.sheetName}"!`, 'success');
     } catch (error) {
-      showNotification('Gagal mengirim data dengan quick send', 'error');
+      showNotification('Gagal mengirim data dengan quick send. Coba gunakan metode alternatif.', 'error');
     } finally {
       setIsProcessing(false);
     }

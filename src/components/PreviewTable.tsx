@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Send, Eye, Loader2, Settings, ChevronDown } from 'lucide-react';
+import { Send, Eye, Loader2, Settings, ChevronDown, Copy, Download, AlertTriangle } from 'lucide-react';
 import { SheetsConfig } from '../types';
+import { hasValidToken, copyToClipboard, exportAsCSV } from '../utils/sheetsIntegration';
 
 interface PreviewTableProps {
   data: string[][];
@@ -12,6 +13,7 @@ interface PreviewTableProps {
 const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isProcessing, config }) => {
   const [showQuickConfigs, setShowQuickConfigs] = useState(false);
   const [savedConfigs, setSavedConfigs] = useState<SheetsConfig[]>([]);
+  const [showAlternatives, setShowAlternatives] = useState(false);
 
   React.useEffect(() => {
     const saved = localStorage.getItem('text-to-sheets-configs');
@@ -25,6 +27,29 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
     setShowQuickConfigs(false);
   };
 
+  const handleCopyToClipboard = async () => {
+    try {
+      await copyToClipboard(data);
+      // Show success notification (you might want to add this to parent component)
+      alert('Data berhasil di-copy ke clipboard! Paste ke Google Sheets secara manual.');
+    } catch (error) {
+      alert('Gagal copy ke clipboard');
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    const csvData = exportAsCSV(data);
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `data-${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getColumnHeaders = () => {
     const columnCount = config.columns.split(':')[1].charCodeAt(0) - config.columns.split(':')[0].charCodeAt(0) + 1;
     return Array.from({ length: columnCount }, (_, i) => 
@@ -33,6 +58,7 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
   };
 
   const columnHeaders = getColumnHeaders();
+  const isAuthenticated = hasValidToken();
 
   return (
     <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/30 p-6 shadow-2xl">
@@ -48,6 +74,15 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* Alternative methods button */}
+          <button
+            onClick={() => setShowAlternatives(!showAlternatives)}
+            className="flex items-center space-x-2 px-3 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg transition-colors text-sm"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <span>Alternatif</span>
+          </button>
+
           {savedConfigs.length > 1 && (
             <div className="relative">
               <button
@@ -85,17 +120,76 @@ const PreviewTable: React.FC<PreviewTableProps> = ({ data, onSendToSheets, isPro
           <button
             onClick={() => handleQuickSend()}
             disabled={isProcessing}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg"
+            className={`flex items-center space-x-2 px-6 py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg ${
+              isAuthenticated 
+                ? 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white'
+                : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white cursor-not-allowed'
+            }`}
+            title={!isAuthenticated ? 'OAuth authentication diperlukan untuk auto-send' : ''}
           >
             {isProcessing ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <Send className="h-5 w-5" />
             )}
-            <span className="font-medium">{isProcessing ? 'Mengirim...' : 'Kirim ke Sheets'}</span>
+            <span className="font-medium">
+              {isProcessing ? 'Mengirim...' : isAuthenticated ? 'Kirim ke Sheets' : 'Auth Required'}
+            </span>
           </button>
         </div>
       </div>
+
+      {/* Alternative methods dropdown */}
+      {showAlternatives && (
+        <div className="mb-6 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4 border border-orange-200">
+          <h4 className="font-semibold text-orange-800 mb-3 flex items-center">
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Metode Alternatif (Tanpa OAuth)
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              onClick={handleCopyToClipboard}
+              className="flex items-center space-x-2 p-3 bg-white hover:bg-gray-50 rounded-lg border border-orange-200 transition-colors"
+            >
+              <Copy className="h-4 w-4 text-orange-600" />
+              <div className="text-left">
+                <p className="font-medium text-gray-800">Copy ke Clipboard</p>
+                <p className="text-xs text-gray-600">Paste manual ke Google Sheets</p>
+              </div>
+            </button>
+            
+            <button
+              onClick={handleDownloadCSV}
+              className="flex items-center space-x-2 p-3 bg-white hover:bg-gray-50 rounded-lg border border-orange-200 transition-colors"
+            >
+              <Download className="h-4 w-4 text-orange-600" />
+              <div className="text-left">
+                <p className="font-medium text-gray-800">Download CSV</p>
+                <p className="text-xs text-gray-600">Import ke Google Sheets</p>
+              </div>
+            </button>
+          </div>
+          <p className="text-xs text-orange-700 mt-3">
+            💡 Tip: Gunakan metode ini jika auto-send tidak bekerja karena masalah authentication
+          </p>
+        </div>
+      )}
+
+      {/* Authentication warning */}
+      {!isAuthenticated && (
+        <div className="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-4 border border-yellow-200">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-yellow-800">Authentication Required</h4>
+              <p className="text-sm text-yellow-700 mt-1">
+                Google Sheets API memerlukan OAuth2 authentication untuk operasi write. 
+                Gunakan metode alternatif di atas atau implementasi OAuth2.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
