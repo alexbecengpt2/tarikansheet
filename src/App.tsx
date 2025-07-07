@@ -7,7 +7,7 @@ import HistoryPanel from './components/HistoryPanel';
 import ExtensionPanel from './components/ExtensionPanel';
 import QuickSendButton from './components/QuickSendButton';
 import { parseTextToColumns } from './utils/textParser';
-import { sendToGoogleSheets, extractSpreadsheetId, handleOAuthCallback } from './utils/sheetsIntegration';
+import { sendToGoogleSheets } from './utils/sheetsIntegration';
 import { HistoryEntry, SheetsConfig as SheetsConfigType } from './types';
 
 function App() {
@@ -17,9 +17,9 @@ function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [sheetsConfig, setSheetsConfig] = useState<SheetsConfigType>({
     spreadsheetId: '1zcsm2DPVccpnOGz_9HkVotn9M9f6KRiA_-C2CNld6_c',
-    apiKey: 'AIzaSyD47bIU8uxywDaoEXqsojTVBlm88Ed0kOM',
-    range: 'Data Tarikan!A:B',
-    sheetName: 'Data Tarikan',
+    apiKey: '',
+    range: 'Sheet1!A:B',
+    sheetName: 'Sheet1',
     columns: 'A:B'
   });
   const [showHistory, setShowHistory] = useState(false);
@@ -31,12 +31,6 @@ function App() {
   } | null>(null);
 
   useEffect(() => {
-    // Handle OAuth callback
-    const oauthHandled = handleOAuthCallback();
-    if (oauthHandled) {
-      showNotification('OAuth authentication berhasil!', 'success');
-    }
-
     const savedHistory = localStorage.getItem('text-to-sheets-history');
     if (savedHistory) {
       setHistory(JSON.parse(savedHistory));
@@ -44,10 +38,7 @@ function App() {
     
     const savedConfig = localStorage.getItem('text-to-sheets-config');
     if (savedConfig) {
-      const config = JSON.parse(savedConfig);
-      // Ensure spreadsheet ID is clean
-      config.spreadsheetId = extractSpreadsheetId(config.spreadsheetId) || config.spreadsheetId;
-      setSheetsConfig(config);
+      setSheetsConfig(JSON.parse(savedConfig));
     }
 
     // Listen for text selection events
@@ -104,25 +95,19 @@ function App() {
   const handleSendToSheets = async (customConfig?: SheetsConfigType) => {
     const configToUse = customConfig || sheetsConfig;
     
-    // Ensure we're using clean spreadsheet ID
-    const cleanConfig = {
-      ...configToUse,
-      spreadsheetId: extractSpreadsheetId(configToUse.spreadsheetId) || configToUse.spreadsheetId
-    };
-    
     if (!parsedData.length) {
       showNotification('Silakan masukkan teks terlebih dahulu', 'error');
       return;
     }
 
-    if (!cleanConfig.spreadsheetId) {
+    if (!configToUse.spreadsheetId) {
       showNotification('Silakan konfigurasi Google Sheets terlebih dahulu', 'error');
       return;
     }
 
     setIsProcessing(true);
     try {
-      await sendToGoogleSheets(parsedData, cleanConfig);
+      await sendToGoogleSheets(parsedData, configToUse);
       
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
@@ -130,7 +115,7 @@ function App() {
         originalText: inputText,
         parsedData: parsedData,
         success: true,
-        sheetName: cleanConfig.sheetName
+        sheetName: configToUse.sheetName
       };
       
       const updatedHistory = [newEntry, ...history];
@@ -139,7 +124,7 @@ function App() {
       
       setInputText('');
       setSelectedText('');
-      showNotification(`Data berhasil dikirim ke sheet "${cleanConfig.sheetName}"!`, 'success');
+      showNotification(`Data berhasil dikirim ke sheet "${configToUse.sheetName}"!`, 'success');
     } catch (error) {
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
@@ -148,7 +133,7 @@ function App() {
         parsedData: parsedData,
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        sheetName: cleanConfig.sheetName
+        sheetName: configToUse.sheetName
       };
       
       const updatedHistory = [newEntry, ...history];
@@ -168,15 +153,9 @@ function App() {
       return;
     }
 
-    // Ensure we're using clean spreadsheet ID
-    const cleanConfig = {
-      ...sheetsConfig,
-      spreadsheetId: extractSpreadsheetId(sheetsConfig.spreadsheetId) || sheetsConfig.spreadsheetId
-    };
-
     setIsProcessing(true);
     try {
-      await sendToGoogleSheets(parsed, cleanConfig);
+      await sendToGoogleSheets(parsed, sheetsConfig);
       
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
@@ -184,7 +163,7 @@ function App() {
         originalText: text,
         parsedData: parsed,
         success: true,
-        sheetName: cleanConfig.sheetName
+        sheetName: sheetsConfig.sheetName
       };
       
       const updatedHistory = [newEntry, ...history];
@@ -192,7 +171,7 @@ function App() {
       localStorage.setItem('text-to-sheets-history', JSON.stringify(updatedHistory));
       
       setSelectedText('');
-      showNotification(`Quick send berhasil ke sheet "${cleanConfig.sheetName}"!`, 'success');
+      showNotification(`Quick send berhasil ke sheet "${sheetsConfig.sheetName}"!`, 'success');
     } catch (error) {
       showNotification('Gagal mengirim data dengan quick send. Coba gunakan metode alternatif.', 'error');
     } finally {
@@ -201,14 +180,8 @@ function App() {
   };
 
   const handleConfigSave = (config: SheetsConfigType) => {
-    // Ensure we're saving clean spreadsheet ID
-    const cleanConfig = {
-      ...config,
-      spreadsheetId: extractSpreadsheetId(config.spreadsheetId) || config.spreadsheetId
-    };
-    
-    setSheetsConfig(cleanConfig);
-    localStorage.setItem('text-to-sheets-config', JSON.stringify(cleanConfig));
+    setSheetsConfig(config);
+    localStorage.setItem('text-to-sheets-config', JSON.stringify(config));
     showNotification('Konfigurasi Google Sheets tersimpan', 'success');
   };
 
