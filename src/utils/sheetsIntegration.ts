@@ -364,10 +364,8 @@ Solusi:
 3. Coba refresh halaman
 4. Periksa status Google API: https://status.cloud.google.com/
 
-Sheets tersedia: ${sheetNames.join(', ')}
 Spreadsheet ID: ${cleanSpreadsheetId}` 
-      };
-    }
+    };
   }
 };
 
@@ -383,132 +381,6 @@ export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> 
   const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
   
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}?key=${apiKey}`;
-  
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sheets: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    return data.sheets?.map((sheet: any) => ({
-      name: sheet.properties.title,
-      id: sheet.properties.sheetId,
-      columns: ['A', 'B', 'C', 'D', 'E', 'F'] // Default columns, could be dynamic
-    })) || [];
-  } catch (error) {
-    console.error('Error fetching sheets list:', error);
-    return [];
-  }
-};
-
-// Helper function to validate spreadsheet URL and extract ID
-export const extractSpreadsheetId = (input: string): string | null => {
-  // If it's already just an ID (no slashes), return it
-  if (!input.includes('/')) {
-    return input.length > 20 ? input : null;
-  }
-  
-  // Extract from various Google Sheets URL formats
-  const patterns = [
-    /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/,
-    /\/spreadsheets\/u\/\d+\/d\/([a-zA-Z0-9-_]+)/,
-    /id=([a-zA-Z0-9-_]+)/
-  ];
-  
-  for (const pattern of patterns) {
-    const match = input.match(pattern);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-  
-  return null;
-};
-
-// Helper function to validate API key format
-export const validateApiKey = (apiKey: string): boolean => {
-  return apiKey.trim().startsWith('AIza') && apiKey.trim().length >= 20;
-};
-    } else {
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        errorData = { error: { message: responseText } };
-      }
-      
-      console.error('Test error:', errorData);
-      
-      if (response.status === 401) {
-        return { 
-          success: false, 
-          message: `❌ API Key tidak valid (401)
-Solusi:
-1. Pastikan API Key dimulai dengan "AIza"
-2. Buka Google Cloud Console
-3. Aktifkan Google Sheets API
-4. Buat API Key baru jika perlu
-
-Current API Key: ${apiKey ? apiKey.substring(0, 10) + '...' : 'not provided'}` 
-        };
-      } else if (response.status === 403) {
-        return { 
-          success: false, 
-          message: `❌ Akses ditolak (403)
-Solusi:
-1. Buka spreadsheet di Google Sheets
-2. Klik "Share" → "General access" → "Anyone with the link"
-3. Set permission ke "Editor"
-4. Pastikan Google Sheets API aktif di Google Cloud Console
-
-Spreadsheet ID: ${cleanSpreadsheetId}` 
-        };
-      } else if (response.status === 404) {
-        return { 
-          success: false, 
-          message: `❌ Spreadsheet tidak ditemukan (404)
-Periksa Spreadsheet ID: ${cleanSpreadsheetId}
-Pastikan spreadsheet masih ada dan dapat diakses
-
-Original input: ${spreadsheetId}` 
-        };
-      } else {
-        return { 
-          success: false, 
-          message: `❌ Error ${response.status}: ${errorData.error?.message || response.statusText}
-Spreadsheet ID: ${cleanSpreadsheetId}` 
-        };
-      }
-    }
-  } catch (error) {
-    console.error('Test connection error:', error);
-    return { 
-      success: false, 
-      message: `❌ Tidak dapat terhubung ke Google Sheets API
-Error: ${error instanceof Error ? error.message : 'Unknown error'}
-Periksa koneksi internet Anda
-Spreadsheet ID: ${cleanSpreadsheetId}` 
-    };
-  }
-};
-
-export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> => {
-  const { spreadsheetId, apiKey } = config;
-  
-  // Ensure spreadsheetId is just the ID, not a URL
-  const cleanSpreadsheetId = extractSpreadsheetId(spreadsheetId) || spreadsheetId;
-  
-  let url = `https://sheets.googleapis.com/v4/spreadsheets/${cleanSpreadsheetId}`;
-  if (apiKey) {
-    url += `?key=${apiKey}`;
-  }
   
   try {
     const response = await fetch(url, {
