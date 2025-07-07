@@ -100,8 +100,8 @@ function App() {
       return;
     }
 
-    if (!configToUse.spreadsheetId) {
-      showNotification('Silakan konfigurasi Google Sheets terlebih dahulu', 'error');
+    if (!configToUse.spreadsheetId || !configToUse.apiKey) {
+      showNotification('Silakan lengkapi konfigurasi Google Sheets (Spreadsheet ID dan API Key)', 'error');
       return;
     }
 
@@ -140,13 +140,18 @@ function App() {
       setHistory(updatedHistory);
       localStorage.setItem('text-to-sheets-history', JSON.stringify(updatedHistory));
       
-      showNotification('Gagal mengirim data ke Google Sheets. Coba gunakan metode alternatif.', 'error');
+      showNotification(`Gagal mengirim data: ${error instanceof Error ? error.message.split('\n')[0] : 'Unknown error'}`, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleQuickSend = async (text: string) => {
+    if (!sheetsConfig.apiKey || !sheetsConfig.spreadsheetId) {
+      showNotification('Konfigurasi Google Sheets belum lengkap (perlu API Key dan Spreadsheet ID)', 'error');
+      return;
+    }
+
     const parsed = parseTextToColumns(text);
     if (parsed.length === 0) {
       showNotification('Tidak ada data yang dapat diparse dari teks yang dipilih', 'error');
@@ -173,7 +178,7 @@ function App() {
       setSelectedText('');
       showNotification(`Quick send berhasil ke sheet "${sheetsConfig.sheetName}"!`, 'success');
     } catch (error) {
-      showNotification('Gagal mengirim data dengan quick send. Coba gunakan metode alternatif.', 'error');
+      showNotification(`Quick send gagal: ${error instanceof Error ? error.message.split('\n')[0] : 'Unknown error'}`, 'error');
     } finally {
       setIsProcessing(false);
     }

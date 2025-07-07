@@ -185,11 +185,26 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h4 className="font-semibold text-blue-800 mb-3 flex items-center">
           <AlertCircle className="h-4 w-4 mr-2" />
-          Setup Cepat (3 Langkah)
+          Setup Cepat (4 Langkah)
         </h4>
         <div className="text-sm text-blue-700 space-y-2">
           <div className="flex items-start space-x-2">
             <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
+            <div>
+              <p><strong>Dapatkan API Key:</strong></p>
+              <a 
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                <ExternalLink className="h-3 w-3" />
+                <span>Google Cloud Console</span>
+              </a>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
             <div>
               <p><strong>Buat/Buka Google Sheets:</strong></p>
               <button 
@@ -202,24 +217,15 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             </div>
           </div>
           <div className="flex items-start space-x-2">
-            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
             <div>
               <p><strong>Share spreadsheet:</strong> Klik "Share" → "Anyone with the link" → "Editor"</p>
             </div>
           </div>
           <div className="flex items-start space-x-2">
-            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
+            <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">4</span>
             <div>
-              <p><strong>Dapatkan API Key (opsional):</strong></p>
-              <a 
-                href="https://console.cloud.google.com/apis/credentials"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-700 font-medium"
-              >
-                <ExternalLink className="h-3 w-3" />
-                <span>Google Cloud Console</span>
-              </a>
+              <p><strong>Masukkan API Key dan Spreadsheet ID:</strong> Test koneksi untuk memastikan setup benar</p>
             </div>
           </div>
         </div>
@@ -311,14 +317,14 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                API Key (Opsional)
+                API Key *
               </label>
               <div className="relative">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={localConfig.apiKey || ''}
                   onChange={(e) => handleChange('apiKey', e.target.value)}
-                  placeholder="AIzaSy... (opsional untuk public sheets)"
+                  placeholder="AIzaSy... (wajib diisi)"
                   className="w-full px-3 py-2 pr-10 bg-white/80 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
@@ -330,7 +336,7 @@ const SheetsConfig: React.FC<SheetsConfigProps> = ({ config, onSave }) => {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Hanya diperlukan untuk private sheets atau rate limiting
+                Diperlukan untuk mengakses Google Sheets API. Dapatkan di Google Cloud Console.
               </p>
             </div>
           </div>
