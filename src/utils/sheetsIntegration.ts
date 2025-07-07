@@ -267,25 +267,33 @@ export const getSheetsList = async (config: SheetsConfig): Promise<SheetInfo[]> 
 
 // Helper function to validate spreadsheet URL and extract ID
 export const extractSpreadsheetId = (input: string): string | null => {
-  // If it's already just an ID (no slashes), return it
-  if (!input.includes('/')) {
-    return input.length > 20 ? input : null;
+  console.log('extractSpreadsheetId: Input received:', input);
+
+  // If it's already just an ID (no slashes or dots, and looks like an ID)
+  // A Google Sheet ID is typically 44 characters long and contains alphanumeric characters, hyphens, and underscores.
+  if (!input.includes('/') && !input.includes('.') && input.length >= 20 && input.match(/^[a-zA-Z0-9_-]+$/)) {
+    console.log('extractSpreadsheetId: Input appears to be a clean ID:', input);
+    return input;
   }
   
   // Extract from various Google Sheets URL formats
   const patterns = [
-    /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/,
-    /\/spreadsheets\/u\/\d+\/d\/([a-zA-Z0-9-_]+)/,
+    // Matches common Google Sheets URLs like /spreadsheets/d/ID/edit or /spreadsheets/d/ID
+    /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)(?:[\/?#]|$)/,
+    // Matches URLs with /u/0/ (user specific)
+    /\/spreadsheets\/u\/\d+\/d\/([a-zA-Z0-9_-]+)(?:[\/?#]|$)/,
     /id=([a-zA-Z0-9-_]+)/
   ];
   
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match && match[1]) {
+      console.log(`extractSpreadsheetId: Matched pattern "${pattern.source}", extracted ID:`, match[1]);
       return match[1];
     }
   }
   
+  console.log('extractSpreadsheetId: No ID extracted from input:', input);
   return null;
 };
 
